@@ -35,10 +35,13 @@ function run(o: Partial<RunSummary>): RunSummary {
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function renderRuns(
+  runs: RunSummary[],
+  severityByRunId?: ReadonlyMap<string, { critical: number; warning: number; suggestion: number }>,
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} severityByRunId={severityByRunId} onOpenTrace={() => {}} />
     </NextIntlClientProvider>,
   );
 }
@@ -72,6 +75,26 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — severity breakdown", () => {
+  it("shows per-severity counts instead of the flat findings text", () => {
+    renderRuns(
+      [run({ status: "done", findings_count: 3, blockers: 2, score: 40 })],
+      new Map([["run-1", { critical: 2, warning: 1, suggestion: 0 }]]),
+    );
+    expect(screen.getByLabelText("2 Critical")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 Warning")).toBeInTheDocument();
+    expect(screen.queryByText(/3 finding/)).not.toBeInTheDocument();
+    // Blockers stay — they're the CI gate, not a severity tally.
+    expect(screen.getByText(/2 blockers/)).toBeInTheDocument();
+  });
+
+  it("falls back to the flat count when the run's review is gone", () => {
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 0, score: 70 })], new Map());
+    expect(screen.getByText(/3 finding/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Critical/)).not.toBeInTheDocument();
   });
 });
 

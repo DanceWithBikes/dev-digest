@@ -15,6 +15,7 @@ import { DRAWER_WIDTH, LOG_HEIGHT, TABS } from "./constants";
 import { eventsToLog, traceLog } from "./helpers";
 import { s } from "./styles";
 import { TraceBody } from "./_components/TraceBody";
+import { FindingsSection } from "./_components/FindingsSection";
 
 export interface RunTraceDrawerProps {
   runId: string;
@@ -96,7 +97,12 @@ export default function RunTraceDrawer({
           ) : trace ? (
             <TraceBody trace={trace} findings={findings} />
           ) : (
-            <div style={s.emptyNote}>{t("drawer.noTrace")}</div>
+            // No persisted trace document — the findings come from the review,
+            // so they're still worth showing rather than an empty drawer.
+            <>
+              <div style={s.emptyNote}>{t("drawer.noTrace")}</div>
+              <FindingsSection findings={findings} />
+            </>
           )
         ) : (
           <LiveLogStream log={shownLog} running={stillRunning} height={LOG_HEIGHT} />

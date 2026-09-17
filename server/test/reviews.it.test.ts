@@ -212,6 +212,51 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('PR list rolls up the latest review: severity counts + read-only previews', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    // Before any review the rollup is null — the list renders "—", not a zero.
+    const before = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    expect(before.find((p: { id: string }) => p.id === pr.id).severity_counts).toBeNull();
+
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'Roll', provider: 'openai', model: 'gpt-4.1', system_prompt: 's' },
+      })
+    ).json();
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+
+    const listed = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    const row = listed.find((p: { id: string }) => p.id === pr.id);
+    // Only the grounded CRITICAL survives, so the list must agree with the PR page.
+    expect(row.severity_counts).toEqual({ critical: 1, warning: 0, suggestion: 0 });
+    expect(row.finding_previews).toHaveLength(1);
+
+    const [preview] = row.finding_previews;
+    expect(preview).toMatchObject({
+      severity: 'CRITICAL',
+      category: 'security',
+      file: 'src/config.ts',
+      start_line: 11,
+    });
+    // Previews are display-only: no suggestion body, no accept/dismiss state.
+    expect(preview).not.toHaveProperty('suggestion');
+    expect(preview).not.toHaveProperty('dismissed_at');
+
+    // Rejecting a finding does NOT change the tally — the card stays on the PR
+    // page (dimmed), so the list would otherwise disagree with the pills.
+    const reviews = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json();
+    await app.inject({ method: 'POST', url: `/findings/${reviews[0].findings[0].id}/dismiss` });
+    const after = (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` })).json();
+    expect(after.find((p: { id: string }) => p.id === pr.id).severity_counts.critical).toBe(1);
+
+    await app.close();
+  });
+
   it('dual-provider structured output: anthropic provider returns the same Review shape', async () => {
     const app = await appWith(REVIEW_FIXTURE, 'anthropic');
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);

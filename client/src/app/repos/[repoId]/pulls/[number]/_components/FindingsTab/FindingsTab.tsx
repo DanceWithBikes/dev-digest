@@ -71,6 +71,15 @@ export function FindingsTab({
     setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
   }, []);
 
+  // Reviews have no cost/token data of their own — that lives on their
+  // agent_runs row. Match by run_id so ReviewRunAccordion/VerdictBanner can
+  // show the cost badge (prRuns already exists for the Timeline above).
+  const runsById = React.useMemo(() => {
+    const map = new Map<string, RunSummary>();
+    for (const run of prRuns ?? []) if (run.run_id) map.set(run.run_id, run);
+    return map;
+  }, [prRuns]);
+
   return (
     <section>
       {liveRunIds.length > 0 && (
@@ -158,6 +167,7 @@ export function FindingsTab({
           <ReviewRunAccordion
             key={review.id}
             review={review}
+            run={review.run_id ? (runsById.get(review.run_id) ?? null) : null}
             prId={prId}
             defaultOpen={i === 0}
             repoFullName={repoFullName}

@@ -6,7 +6,14 @@
  * + age, so it gets unit coverage independent of the route's queries.
  */
 import { describe, it, expect } from 'vitest';
-import { deriveReviewStatus, rollupSeverities, STALE_DAYS } from '../src/modules/pulls/status.js';
+import {
+  deriveReviewStatus,
+  rollupSeverities,
+  toFindingPreviews,
+  FINDING_PREVIEW_LIMIT,
+  FINDING_PREVIEW_RATIONALE_MAX,
+  STALE_DAYS,
+} from '../src/modules/pulls/status.js';
 
 const DAY = 86_400_000;
 const now = Date.UTC(2026, 5, 11);
@@ -64,5 +71,60 @@ describe('rollupSeverities', () => {
 
   it('is all-zero for no findings', () => {
     expect(rollupSeverities([])).toEqual({ critical: 0, warning: 0, suggestion: 0 });
+  });
+});
+
+describe('toFindingPreviews', () => {
+  const row = (o: Partial<Parameters<typeof toFindingPreviews>[0][number]> = {}) => ({
+    id: 'f1',
+    severity: 'WARNING',
+    category: 'perf',
+    title: 'N+1 query',
+    file: 'src/api/users.ts',
+    startLine: 45,
+    endLine: 52,
+    confidence: 0.86,
+    rationale: 'Loop issues one query per user.',
+    ...o,
+  });
+
+  it('maps DB rows to the contract shape (snake_case line fields)', () => {
+    expect(toFindingPreviews([row()])).toEqual([
+      {
+        id: 'f1',
+        severity: 'WARNING',
+        category: 'perf',
+        title: 'N+1 query',
+        file: 'src/api/users.ts',
+        start_line: 45,
+        end_line: 52,
+        confidence: 0.86,
+        rationale: 'Loop issues one query per user.',
+      },
+    ]);
+  });
+
+  it('orders worst-first (CRITICAL → WARNING → SUGGESTION), not alphabetically', () => {
+    const previews = toFindingPreviews([
+      row({ id: 'a', severity: 'SUGGESTION' }),
+      row({ id: 'b', severity: 'WARNING' }),
+      row({ id: 'c', severity: 'CRITICAL' }),
+    ]);
+    expect(previews.map((p) => p.severity)).toEqual(['CRITICAL', 'WARNING', 'SUGGESTION']);
+  });
+
+  it('caps the list and truncates long rationales', () => {
+    const many = Array.from({ length: FINDING_PREVIEW_LIMIT + 5 }, (_, i) => row({ id: `f${i}` }));
+    expect(toFindingPreviews(many)).toHaveLength(FINDING_PREVIEW_LIMIT);
+
+    const [long] = toFindingPreviews([row({ rationale: 'x'.repeat(FINDING_PREVIEW_RATIONALE_MAX + 50) })]);
+    expect(long!.rationale).toHaveLength(FINDING_PREVIEW_RATIONALE_MAX + 1); // + the ellipsis
+    expect(long!.rationale.endsWith('…')).toBe(true);
+  });
+
+  it('does not mutate the input array order', () => {
+    const rows = [row({ id: 'a', severity: 'SUGGESTION' }), row({ id: 'b', severity: 'CRITICAL' })];
+    toFindingPreviews(rows);
+    expect(rows.map((r) => r.id)).toEqual(['a', 'b']);
   });
 });

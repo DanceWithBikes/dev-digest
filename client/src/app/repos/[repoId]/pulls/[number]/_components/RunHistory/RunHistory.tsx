@@ -4,7 +4,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import { RunCostBadge } from "@/components/run-cost-badge";
-import type { RunSummary, PrCommit } from "@devdigest/shared";
+import { SeverityCounts, totalFindings } from "@/components/findings-summary";
+import type { RunSummary, PrCommit, PrSeverityCounts } from "@devdigest/shared";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -88,12 +89,16 @@ function tsOf(s: string | null | undefined): number {
 export function RunHistory({
   runs,
   commits = [],
+  severityByRunId,
   onOpenTrace,
   onGoToReview,
   onDelete,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
+  /** Per-run severity tallies from the loaded reviews; absent for runs whose
+   *  review is gone (deleted / failed), which keep the plain findings count. */
+  severityByRunId?: ReadonlyMap<string, PrSeverityCounts>;
   /** Open the trace + log drawer for a run (the logs icon). */
   onOpenTrace: (runId: string) => void;
   /** Jump to this run's inline review accordion below (clicking the agent name). */
@@ -150,6 +155,7 @@ export function RunHistory({
         const r = item.run;
         const o = outcomeOf(r);
         const settled = r.status === "done";
+        const sev = severityByRunId?.get(r.run_id);
         return (
           <div key={`run:${r.run_id}`} style={rowStyle}>
             <Badge color={o.color} bg={o.bg} icon={o.icon}>
@@ -190,8 +196,20 @@ export function RunHistory({
                 </div>
               )}
               {settled && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {t("runStatus.findings", { count: r.findings_count ?? 0 })}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {sev && totalFindings(sev) > 0 ? (
+                    <SeverityCounts counts={sev} />
+                  ) : (
+                    t("runStatus.findings", { count: r.findings_count ?? 0 })
+                  )}
                   {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
                 </div>
               )}

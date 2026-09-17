@@ -1,7 +1,7 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import type { RunTrace } from "@devdigest/shared";
+import type { FindingRecord, RunTrace } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/runs.json"; // apps/web/messages/en/runs.json
 
 // Mock the trace hooks so the drawer renders without a query client / SSE.
@@ -19,8 +19,32 @@ const TRACE: RunTrace = {
   ],
 };
 
+const FINDINGS: FindingRecord[] = [
+  {
+    id: "f1",
+    severity: "SUGGESTION",
+    category: "style",
+    title: "Extract the magic number",
+    file: "src/limiter.ts",
+    start_line: 9,
+    end_line: 9,
+    rationale: "60_000 appears twice.",
+    suggestion: null,
+    confidence: 0.7,
+    kind: "finding",
+    trifecta_components: null,
+    evidence: null,
+    review_id: "r1",
+    accepted_at: null,
+    dismissed_at: null,
+  },
+];
+
+// Mutable so a test can drop the persisted trace document without re-mocking.
+const state = vi.hoisted(() => ({ trace: null as RunTrace | null }));
+
 vi.mock("../../../../../../../lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: TRACE, isLoading: false }),
+  useRunTrace: () => ({ data: state.trace, isLoading: false }),
 }));
 vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
@@ -29,6 +53,9 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
 import RunTraceDrawer from "./RunTraceDrawer";
 
 afterEach(cleanup);
+beforeEach(() => {
+  state.trace = TRACE;
+});
 
 function renderWithIntl(ui: React.ReactElement) {
   return render(
@@ -53,5 +80,37 @@ describe("A5 Run Trace drawer (smoke)", () => {
     fireEvent.click(screen.getByText("log"));
     // LiveLogStream renders its filter input
     expect(screen.getByPlaceholderText("Filter log…")).toBeInTheDocument();
+  });
+});
+
+describe("A5 Run Trace drawer — findings", () => {
+  it("lists the run's findings alongside the stats", () => {
+    renderWithIntl(
+      <RunTraceDrawer
+        runId="r1"
+        agentName="Security"
+        prNumber={482}
+        findings={FINDINGS}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText("Findings")).toBeInTheDocument();
+    expect(screen.getByText("Extract the magic number")).toBeInTheDocument();
+    expect(screen.getByText("src/limiter.ts:9")).toBeInTheDocument();
+  });
+
+  it("still lists them when the run has no persisted trace document", () => {
+    state.trace = null;
+    renderWithIntl(
+      <RunTraceDrawer
+        runId="r1"
+        agentName="Security"
+        prNumber={482}
+        findings={FINDINGS}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText("No trace available yet.")).toBeInTheDocument();
+    expect(screen.getByText("Extract the magic number")).toBeInTheDocument();
   });
 });

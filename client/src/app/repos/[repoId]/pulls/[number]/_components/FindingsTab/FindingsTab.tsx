@@ -5,8 +5,15 @@ import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
 import { RunHistory } from "../RunHistory/RunHistory";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
+import { countBySeverity } from "@/components/findings-summary";
 import { s } from "./styles";
-import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
+import type {
+  FindingRecord,
+  ReviewRecord,
+  RunSummary,
+  PrCommit,
+  PrSeverityCounts,
+} from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 interface FindingsTabProps {
@@ -80,6 +87,17 @@ export function FindingsTab({
     return map;
   }, [prRuns]);
 
+  // The inverse: per-severity tallies for the timeline tiles. agent_runs only
+  // stores a flat findings_count, so the breakdown comes from the reviews we
+  // already loaded — no extra request.
+  const severityByRunId = React.useMemo(() => {
+    const map = new Map<string, PrSeverityCounts>();
+    for (const review of runs) {
+      if (review.run_id) map.set(review.run_id, countBySeverity(review.findings));
+    }
+    return map;
+  }, [runs]);
+
   return (
     <section>
       {liveRunIds.length > 0 && (
@@ -140,6 +158,7 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            severityByRunId={severityByRunId}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}

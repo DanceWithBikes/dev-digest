@@ -15,6 +15,7 @@ import {
   Settings,
   Repo,
   PrDetail,
+  PrMeta,
 } from '@devdigest/shared';
 
 /**
@@ -213,5 +214,45 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+
+  it('PrMeta findings rollup is optional (only the list endpoint fills it)', () => {
+    const base = {
+      number: 482,
+      title: 't',
+      author: 'a',
+      branch: 'b',
+      base: 'main',
+      head_sha: 'sha',
+      additions: 1,
+      deletions: 0,
+      files_count: 1,
+      status: 'needs_review',
+    };
+    // PR detail / GitHub-sourced rows omit the rollup entirely.
+    expect(() => PrMeta.parse(base)).not.toThrow();
+
+    const listed = PrMeta.parse({
+      ...base,
+      severity_counts: { critical: 1, warning: 2, suggestion: 0 },
+      finding_previews: [
+        {
+          id: 'f1',
+          severity: 'CRITICAL',
+          category: 'security',
+          title: 'Hardcoded secret',
+          file: 'src/config.ts',
+          start_line: 12,
+          end_line: 12,
+          confidence: 0.98,
+          rationale: 'A literal sk_live_ key is committed.',
+        },
+      ],
+    });
+    expect(listed.severity_counts).toEqual({ critical: 1, warning: 2, suggestion: 0 });
+    expect(listed.finding_previews).toHaveLength(1);
+
+    // Negative tallies and non-preview fields are rejected.
+    expect(() => PrMeta.parse({ ...base, severity_counts: { critical: -1, warning: 0, suggestion: 0 } })).toThrow();
   });
 });

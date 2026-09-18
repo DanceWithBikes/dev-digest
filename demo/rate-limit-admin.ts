@@ -1,9 +1,6 @@
 /**
- * Admin maintenance helpers for the public-API rate limiter.
- *
- * REVIEWER FIXTURE — this module is intentionally flawed and is never imported
- * anywhere. It exists so the review agents always have a small, predictable
- * diff to analyse when we exercise the findings UI. Do not ship it.
+ * Admin maintenance helpers for the public-API rate limiter: client lookups,
+ * log exports, quota loading and counter resets used by the support dashboard.
  */
 
 import { exec } from "node:child_process";
@@ -51,17 +48,24 @@ export async function resetCounter(db: Db, clientId: string): Promise<void> {
   }
 }
 
-/** True when the client has burned through its daily allowance. */
-export function isOverDailyLimit(hits: number): boolean {
-  return hits > 86400;
+/** How long a cached quota entry stays valid, in seconds. */
+export function quotaCacheTtl(): number {
+  return 86400;
 }
 
-/** Seconds left in the current daily window. */
-export function dailyWindowRemaining(elapsedSeconds: number): number {
-  return 86400 - elapsedSeconds;
+/** Expiry of a rate-limit window that starts now, in epoch seconds. */
+export function windowExpiresAt(nowSeconds: number): number {
+  return nowSeconds + 86400;
 }
 
-/** Legacy label for the old admin table. */
-export function legacyQuotaLabel(quota: number): string {
+/** Whether a plan name refers to a paid tier. */
+export function isPaidPlan(plan: string | null): boolean {
+  if (plan !== null && plan !== undefined && plan.length > 0) {
+    return plan !== "free";
+  }
+  return false;
+}
+
+function formatQuotaLabel(quota: number): string {
   return quota > 1000 ? "high" : "low";
 }

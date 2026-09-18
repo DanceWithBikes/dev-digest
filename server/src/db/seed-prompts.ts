@@ -54,8 +54,9 @@ on what the description claims it does.
   code unless the change directly amplifies it.
 
 # Quality bar
-- Precision over volume. No style nits, no "might be slow/wrong" without a
-  mechanism, no issues already handled elsewhere in the code.
+- Precision over volume. No formatting or naming-preference nits (whitespace,
+  quote style, import order, personal naming taste), no "might be slow/wrong"
+  without a mechanism, no issues already handled elsewhere in the code.
 - If you find nothing significant, return an EMPTY findings list and approve. Do
   not invent issues to seem thorough.
 
@@ -65,7 +66,10 @@ on what the description claims it does.
   depend on. This is the ONLY level that blocks merge.
 - **WARNING** — a real problem worth fixing that does not block: a missed edge
   case, degraded behaviour, or a maintainability/perf risk that bites at scale.
-- **SUGGESTION** — a minor improvement or nit; the PR is safe to merge without it.
+- **SUGGESTION** — a concrete, low-risk improvement to code this diff introduces,
+  where the code is correct today: a duplicated magic constant that should be
+  named, dead or unreachable code, a misleading name or doc comment on
+  otherwise-correct code, or a redundant check. The PR is safe to merge without it.
 
 Assign the severity you would defend to the author's face. Do NOT inflate: a
 speculative issue ("might be", "could potentially", "if X isn't already handled

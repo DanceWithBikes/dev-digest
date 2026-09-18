@@ -5,6 +5,8 @@
 
 import { exec } from "node:child_process";
 
+console.log(" here we go :) ");
+
 interface Db {
   query(sql: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
 }

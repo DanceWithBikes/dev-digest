@@ -18,7 +18,7 @@ When an insight becomes a permanent rule, move it as one line into the relevant 
 ## Codebase Patterns
 
 - **2026-09-18 · Every CI workflow is path-filtered, so file placement decides whether CI runs at all** — All five `.github/workflows/*.yml` trigger on `pull_request`, but each scopes itself with `paths:` — `client.yml` → `client/**`; `server-unit.yml` → `server/**`, `reviewer-core/**`; `server-integration.yml` → `server/**`; `reviewer-core.yml` → `reviewer-core/**`, `server/src/vendor/shared/**`; `e2e-web.yml` → `client/**`, `server/**`, `e2e/**`. A file in a NEW top-level directory (e.g. `demo/`) therefore fires zero workflows, sits outside every package's `tsconfig` (so it can't break `pnpm typecheck`), and stays out of dependency-cruiser's graph — the right home for reviewer fixtures or scratch code that must be committable without running the Docker-backed e2e job. Flip side: touching `server/**` in a PR fires three workflows including integration + e2e.
-  Where: `.github/workflows/*.yml`, `demo/rate-limit-admin.ts`
+  Where: `.github/workflows/*.yml`, `demo/findings-code-example.ts`
 
 - **2026-09-17 · A reverted commit can be a ready-made reference after a starter-state reset** — This repo was reset to its course starter state (`c6af1e4`), reverting real feature work done on it. `git show <sha> -- <path>` on a commit found via `git log --all --oneline -- <path>` can surface a near-complete, directly reusable diff for a feature that looks like course homework — e.g. `93119a5` ("run cost badge") supplied the schema/migration/contracts/executor/repo/route diff and a `RunCostBadge` component wholesale. Check history before re-implementing from scratch.
   Where: repo history, commit `93119a5`

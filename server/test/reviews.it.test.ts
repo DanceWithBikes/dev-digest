@@ -257,6 +257,41 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     await app.close();
   });
 
+  it('PR list cost is the TOTAL of all the PR runs, not the latest one', async () => {
+    const app = await appWith(REVIEW_FIXTURE);
+    const { repo, pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    const listedCost = async () =>
+      (await app.inject({ method: 'GET', url: `/repos/${repo.id}/pulls` }))
+        .json()
+        .find((p: { id: string }) => p.id === pr.id).cost_usd;
+
+    // No run yet → null (the list renders "—", never "$0.00").
+    expect(await listedCost()).toBeNull();
+
+    const agent = (
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name: 'Spend', provider: 'openai', model: 'gpt-4.1', system_prompt: 's' },
+      })
+    ).json();
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    await waitForPrRuns(pg.handle.db, pr.id, { expected: 1 });
+    const firstRunCost = await listedCost();
+    expect(firstRunCost).toBeGreaterThan(0);
+
+    // A re-run adds to the total instead of replacing it.
+    await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { agentId: agent.id } });
+    const runs = await waitForPrRuns(pg.handle.db, pr.id, { expected: 2 });
+    const expectedTotal = runs.reduce((acc, r) => acc + (r.costUsd ?? 0), 0);
+
+    const total = await listedCost();
+    expect(total).toBeCloseTo(expectedTotal, 10);
+    expect(total).toBeGreaterThan(firstRunCost);
+
+    await app.close();
+  });
+
   it('dual-provider structured output: anthropic provider returns the same Review shape', async () => {
     const app = await appWith(REVIEW_FIXTURE, 'anthropic');
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);

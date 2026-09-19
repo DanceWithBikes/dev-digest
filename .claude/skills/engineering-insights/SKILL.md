@@ -35,11 +35,11 @@ An entry must be **actionable cold**: a reader with no context knows what to do.
 - "The reviews module is complex"
 
 ✅ Good — specific, located, prescriptive:
-- "`Promise.all()` in the ingest pipeline times out after ~30 items — in this module use `Promise.allSettled()` with batches of 10."
-- "`costUsd` is returned by `reviewer-core` but never persisted: `agent_runs` has no column. `null` means 'model price unknown', not `$0`."
-- "Changing a contract in `server/src/vendor/shared` without the `client/` copy compiles fine and breaks only at runtime — always `diff -r` both copies."
+- "`Promise.all()` in the ingest pipeline times out after ~30 items — in this module use `Promise.allSettled()` with batches of 10." → `Where: \`pipeline/ingest.ts:42\` (\`ingestAll\`)`
+- "`costUsd` is returned by `reviewer-core` but never persisted: `agent_runs` has no column. `null` means 'model price unknown', not `$0`." → `Where: \`reviewer-core/src/review/run.ts:184\` (\`costUsd\`), \`server/src/db/schema/runs.ts:8\` (\`agentRuns\`)`
+- "Changing a contract in `server/src/vendor/shared` without the `client/` copy compiles fine and breaks only at runtime — always `diff -r` both copies." → `Where: \`server/src/vendor/shared/contracts/platform.ts:185\` (\`PrMeta\`)`
 
-Every entry names **what**, **where** (file paths / symbols), and **what to do instead**.
+Every entry names **what**, **where** (`file:line` + symbol), and **what to do instead**.
 
 Never write: secrets or API keys, temporary task state, anything already in `CLAUDE.md` / `docs/specs/` / git history, guesses presented as facts.
 
@@ -58,7 +58,9 @@ Never write: secrets or API keys, temporary task state, anything already in `CLA
 2. **Dedupe:** if an entry on the same topic exists, update it instead of adding a new one.
    - Recurring Errors: bump the counter (`×2`, `×3`). At `×3`, propose to the user promoting the fix into that module's `CLAUDE.md` as a one-line rule (keep the "why" here).
    - Open Questions: once answered, remove it and write the answer into the proper section.
-3. **Verify** that the paths and symbols you cite actually exist.
+   - A claim turned out wrong: append `**Correction (YYYY-MM-DD):** <what is actually true + evidence>` inside that entry. Keep the original text — the mistake is part of the lesson.
+   - A cited line moved (you touched that file): refresh the number in its `Where:`.
+3. **Verify** that the paths and symbols you cite actually exist, and take each line number from `grep -n` right before writing.
 4. **Insert** at the top of the right section (newest first) with the Edit tool, using the format below.
 5. Tell the user in one line: `Insight recorded → <path> (<section>)`.
 
@@ -66,8 +68,14 @@ Never write: secrets or API keys, temporary task state, anything already in `CLA
 
 ```md
 - **YYYY-MM-DD · <short title>** — <what happens and what to do>.
-  Where: `path/to/file.ts`, `symbol()`
+  Where: `path/to/file.ts:123` (`symbol()`), `path/to/other.ts:45` (`CONSTANT`)
 ```
+
+`Where:` rules — every entry has one:
+- **`file:line` + symbol, always both.** The line is for navigation; the symbol is the anchor that survives edits — when the number drifts, search for the symbol.
+- **Point at the exact statement** the entry is about (the `if`, the declaration, the style key, the SQL), not the top of the file.
+- **Paths:** relative to the insights file's module/package root (as the file already does); repo-root paths for anything outside it.
+- **No code anchor** (CLI behaviour, git history, an external file): say so and give the closest real thing — `Where: no code anchor — \`gh auth status\`; remote \`origin\``.
 
 Section-specific requirements:
 - **What Doesn't Work:** `Tried: … → Failed because: … → Instead: …`

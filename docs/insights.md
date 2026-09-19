@@ -31,6 +31,12 @@ When an insight becomes a permanent rule, move it as one line into the relevant 
 
 ## Tool & Library Notes
 
+- **2026-09-19 · `gh` is installed but may be unauthenticated — check `gh auth status` before `gh pr create`** — `gh` was missing (`command not found: gh`) and was installed with `brew install gh` (2.101.0); its first device-flow login ended in `access_denied`, so it may still be logged out. `gh auth login` is interactive, but `echo | gh auth login --web --hostname github.com --git-protocol ssh --skip-ssh-key` run as a background Bash task prints the one-time code + `https://github.com/login/device` to its output file and exits once the user approves or denies. If auth isn't available, don't block: print `https://github.com/DanceWithBikes/dev-digest/compare/main...<branch>?expand=1&title=<enc>&body=<enc>` built with `encodeURIComponent` in a `node -e` one-liner — GitHub opens the PR form fully filled in.
+  Where: any PR-opening step; remote `origin` = `github.com:DanceWithBikes/dev-digest`
+
+- **2026-09-19 · Syntax-check a file outside every tsconfig with `typescript.transpileModule`, not esbuild** — Files in `demo/` belong to no package, so `pnpm typecheck` never sees them, and their imports (e.g. `./schema`) may not exist on purpose. `require('esbuild')` from `server/` fails with `Cannot find module 'esbuild'` (it's only a nested dependency of `tsx`, not hoisted). What works from `server/`: `node -e "const ts=require('typescript');const r=ts.transpileModule(require('fs').readFileSync('../demo/<file>.ts','utf8'),{reportDiagnostics:true,compilerOptions:{module:99,target:99}});console.log(r.diagnostics.length?r.diagnostics:'syntax OK')"` — syntax only, unresolved imports are ignored.
+  Where: `demo/*.ts`, `server/node_modules/typescript`
+
 - **2026-09-18 · `tsx -e` compiles as CommonJS — top-level `await` fails** — Running a one-off script with `pnpm exec tsx -e '…await fetch(…)'` in `server/` dies with `Top-level await is currently not supported with the "cjs" output format`, and the request never goes out (easy to miss when the output is tailed). Wrap the body in `(async () => { … })();`, or write a temp `.mts` file. Useful pattern this came from: importing a TS constant straight from source (e.g. `GENERAL_REVIEWER_PROMPT`) to PUT it to the API guarantees the live value is byte-identical to the file.
   Where: any ad-hoc `tsx -e` in `server/`
 

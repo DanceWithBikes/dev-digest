@@ -56,8 +56,9 @@ export default function PRDetailPage() {
   const invalidateRunHistory = () => {
     if (prId) qc.invalidateQueries({ queryKey: ["pr-runs", prId] });
   };
-  // The PR list denormalizes the latest review (score, cost, severity counts),
-  // so a finished run makes its cached row stale until the 60s refetch.
+  // The PR list denormalizes the latest review (score, severity counts) and the
+  // total cost of all runs, so a finished run makes its cached row stale until
+  // the 60s refetch.
   const invalidatePullsList = () => {
     qc.invalidateQueries({ queryKey: ["pulls", repoId] });
   };

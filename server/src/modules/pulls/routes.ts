@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sum } from 'drizzle-orm';
 import type { PrMeta, PrDetail, GitHubClient, PrReviewComment } from '@devdigest/shared';
 import { PrCommentInput } from '@devdigest/shared';
 import * as t from '../../db/schema.js';
@@ -147,19 +147,21 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
       }
     }
 
-    // Latest completed run's COST per PR for the list's cost badge. Same
-    // read-time derivation as the score above: newest-first agent_runs rows,
-    // first seen per PR wins. Only status='done' runs count — a failed run has
-    // no meaningful spend to surface.
-    const latestRunCostByPr = new Map<string, number | null>();
+    // TOTAL spend per PR for the list's cost badge: SUM over ALL of the PR's
+    // runs (every agent, every re-run) — unlike the score, this is not "latest".
+    // Status is not filtered: failed/cancelled/running rows persist
+    // cost_usd = null and SUM skips nulls, as it does runs with unknown pricing.
+    // Null only when no run reported a cost.
+    const totalCostByPr = new Map<string, number>();
     if (prIds.length > 0) {
-      const runRows = await container.db
-        .select({ prId: t.agentRuns.prId, costUsd: t.agentRuns.costUsd })
+      const costRows = await container.db
+        .select({ prId: t.agentRuns.prId, total: sum(t.agentRuns.costUsd) })
         .from(t.agentRuns)
-        .where(and(inArray(t.agentRuns.prId, prIds), eq(t.agentRuns.status, 'done')))
-        .orderBy(desc(t.agentRuns.ranAt));
-      for (const run of runRows) {
-        if (run.prId && !latestRunCostByPr.has(run.prId)) latestRunCostByPr.set(run.prId, run.costUsd);
+        .where(inArray(t.agentRuns.prId, prIds))
+        .groupBy(t.agentRuns.prId);
+      // Drizzle's sum() maps to string (numeric-safe) — convert back for the contract.
+      for (const row of costRows) {
+        if (row.prId && row.total != null) totalCostByPr.set(row.prId, Number(row.total));
       }
     }
 
@@ -188,7 +190,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         opened_at: r.openedAt?.toISOString() ?? null,
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
-        cost_usd: latestRunCostByPr.get(r.id) ?? null,
+        cost_usd: totalCostByPr.get(r.id) ?? null,
         severity_counts: review ? rollupSeverities(reviewFindings) : null,
         finding_previews: review ? toFindingPreviews(reviewFindings) : null,
       };

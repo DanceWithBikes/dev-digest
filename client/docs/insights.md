@@ -33,11 +33,11 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Open Questions
 
-- **2026-09-19 · `client/CLAUDE.md` says "fetch is mocked" — it isn't** — there is no global fetch mock (`src/test/setup.ts` only polyfills `ResizeObserver`); component tests `vi.mock` the hook modules instead (e.g. `FindingsPanel.test.tsx`). A test that renders a component using an un-mocked hook will try the real network. Open: fix the CLAUDE.md line, or add a global fetch stub?
-  Where: `CLAUDE.md:8`, `src/test/setup.ts:3`
+- **2026-09-19 · `client/AGENTS.md` says "fetch is mocked" — it isn't** — there is no global fetch mock (`src/test/setup.ts` only polyfills `ResizeObserver`); component tests `vi.mock` the hook modules instead (e.g. `FindingsPanel.test.tsx`). A test that renders a component using an un-mocked hook will try the real network. Open: fix the AGENTS.md line, or add a global fetch stub?
+  Where: `AGENTS.md:8`, `src/test/setup.ts:3`
 
 - **2026-09-19 · The Run Trace drawer never streams live** — the PR page never passes `running`, so the drawer's SSE/live-log branch is unreachable; "Open run trace" on a live run shows the persisted (or missing) trace.
   Where: `src/app/repos/[repoId]/pulls/[number]/page.tsx:182` (no `running` prop), `src/app/repos/[repoId]/pulls/[number]/_components/RunTraceDrawer/RunTraceDrawer.tsx:46`
 
 - **2026-09-19 · Copy rules are not followed everywhere** — several screens hardcode English despite "copy only via `useTranslations`" (e.g. `src/app/page.tsx:23`, `src/app/repos/[repoId]/pulls/[number]/_components/FindingsTab/FindingsTab.tsx:124`), and 12 of 18 `messages/en/*.json` namespaces are never read yet all ship to the browser. e2e flows 04/05 match some of the hardcoded literals — translate them and those flows break.
-  Where: `CLAUDE.md:24` (the rule), `src/i18n/request.ts:19` (all namespaces loaded)
+  Where: `AGENTS.md:24` (the rule), `src/i18n/request.ts:19` (all namespaces loaded)

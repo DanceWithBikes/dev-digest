@@ -3,7 +3,7 @@
 Knowledge you can't see in the code. Newest entry on top of each section.
 Cross-package insights live here; module-specific ones go to the nearest `docs/insights.md`.
 Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
-When an insight becomes a permanent rule, move it as one line into the relevant `CLAUDE.md` and keep the "why" here.
+When an insight becomes a permanent rule, move it as one line into the relevant `AGENTS.md` and keep the "why" here.
 
 ## What Works
 
@@ -47,8 +47,8 @@ When an insight becomes a permanent rule, move it as one line into the relevant 
   Where: no code anchor — external `*.html` design exports (e.g. in `~/Downloads`); decode via Node `zlib`/`Buffer`
   **Correction (2026-09-19):** "this is why `fflate` is a dependency" is false — `fflate` is in no `package.json` today. It was added in `2006964` for the (since reverted) skills module, unrelated to these exports, and removed by the `c6af1e4` reset. Decoding the exports needs no project dependency — Node's built-in `zlib` is enough.
 
-- **2026-09-17 · `pnpm db:generate`/`pnpm typecheck` can block on pnpm's build-script approval gate** — First run in `server/` or `client/` this session failed with `ERR_PNPM_IGNORED_BUILDS` (pnpm 10's supply-chain policy blocks native postinstall scripts — esbuild, sharp, ssh2, cpu-features, protobufjs — until approved). Fix: `pnpm approve-builds --all -y` in the affected package dir, then re-run the command. Side effect: this writes a new `<package>/pnpm-workspace.yaml` with an `allowBuilds:` map to persist the approval — expect it as an untracked file, it isn't a workspace declaration and doesn't contradict the "no workspace, per-package lockfiles" rule in the root `CLAUDE.md`.
-  Where: `server/pnpm-workspace.yaml:1` (`allowBuilds:` — cpu-features, esbuild, protobufjs, ssh2), `client/pnpm-workspace.yaml:1` (esbuild, sharp); the no-workspace rule is `CLAUDE.md:25`
+- **2026-09-17 · `pnpm db:generate`/`pnpm typecheck` can block on pnpm's build-script approval gate** — First run in `server/` or `client/` this session failed with `ERR_PNPM_IGNORED_BUILDS` (pnpm 10's supply-chain policy blocks native postinstall scripts — esbuild, sharp, ssh2, cpu-features, protobufjs — until approved). Fix: `pnpm approve-builds --all -y` in the affected package dir, then re-run the command. Side effect: this writes a new `<package>/pnpm-workspace.yaml` with an `allowBuilds:` map to persist the approval — expect it as an untracked file, it isn't a workspace declaration and doesn't contradict the "no workspace, per-package lockfiles" rule in the root `AGENTS.md`.
+  Where: `server/pnpm-workspace.yaml:1` (`allowBuilds:` — cpu-features, esbuild, protobufjs, ssh2), `client/pnpm-workspace.yaml:1` (esbuild, sharp); the no-workspace rule is `AGENTS.md:26`
   **Correction (2026-09-19):** "expect it as an untracked file" is stale — both `pnpm-workspace.yaml` files are committed now (`git ls-files`), so a fresh checkout already has the approvals and shouldn't hit the gate.
 
 - **2026-09-17 · Bulk shell overwrites of docs are denied in auto mode** — a `for … sed > "$f"` loop rewriting all `docs/insights.md` files was blocked by the auto-mode classifier as "irreversible local destruction". Instead: `Read` each file, then `Edit` it (parallel calls are fine).

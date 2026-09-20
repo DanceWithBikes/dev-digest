@@ -1,6 +1,6 @@
 ---
 name: engineering-insights
-description: Record non-obvious engineering knowledge into the nearest module's docs/insights.md during ANY session. Use this skill whenever you hit something a future agent could not learn by reading the code — surprising behavior, a dead end or abandoned approach, an error you had to debug (especially one seen before), a library/tool quirk, an implicit convention or architectural decision, or a question you could not resolve. Also use it at the end of a task to leave a short session note. Do NOT use it for things already stated in CLAUDE.md, specs, or obvious from the code.
+description: Record non-obvious engineering knowledge into the nearest module's docs/insights.md during ANY session. Use this skill whenever you hit something a future agent could not learn by reading the code — surprising behavior, a dead end or abandoned approach, an error you had to debug (especially one seen before), a library/tool quirk, an implicit convention or architectural decision, or a question you could not resolve. Also use it at the end of a task to leave a short session note. Do NOT use it for things already stated in AGENTS.md, specs, or obvious from the code.
 ---
 
 # Engineering Insights
@@ -41,14 +41,14 @@ An entry must be **actionable cold**: a reader with no context knows what to do.
 
 Every entry names **what**, **where** (`file:line` + symbol), and **what to do instead**.
 
-Never write: secrets or API keys, temporary task state, anything already in `CLAUDE.md` / `docs/specs/` / git history, guesses presented as facts.
+Never write: secrets or API keys, temporary task state, anything already in `AGENTS.md` / `docs/specs/` / git history, guesses presented as facts.
 
 ## Where to write
 
 1. Take the file(s) you were working on. Walk up the directory tree and use the **nearest** `docs/insights.md`:
    `server/src/modules/<m>/docs/insights.md` → `server/docs/insights.md` → `docs/insights.md` (root).
 2. Insight spans several packages (server + client, shared contracts, tooling) → root `docs/insights.md`.
-3. The module has a `CLAUDE.md` but no `docs/insights.md` → create it from `references/template.md`.
+3. The module has an `AGENTS.md` but no `docs/insights.md` → create it from `references/template.md`.
 
 ## How to write
 
@@ -56,7 +56,7 @@ Never write: secrets or API keys, temporary task state, anything already in `CLA
 
 1. **Read** the target file first.
 2. **Dedupe:** if an entry on the same topic exists, update it instead of adding a new one.
-   - Recurring Errors: bump the counter (`×2`, `×3`). At `×3`, propose to the user promoting the fix into that module's `CLAUDE.md` as a one-line rule (keep the "why" here).
+   - Recurring Errors: bump the counter (`×2`, `×3`). At `×3`, propose to the user promoting the fix into that module's `AGENTS.md` as a one-line rule (keep the "why" here).
    - Open Questions: once answered, remove it and write the answer into the proper section.
    - A claim turned out wrong: append `**Correction (YYYY-MM-DD):** <what is actually true + evidence>` inside that entry. Keep the original text — the mistake is part of the lesson.
    - A cited line moved (you touched that file): refresh the number in its `Where:`.

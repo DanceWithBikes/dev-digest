@@ -1,0 +1,54 @@
+{
+  "skill_name": "pr-self-review",
+  "fixtures": "Evals 1-2 run in git worktrees with seeded, uncommitted changes on top of a base branch `psr-eval-base` (eval 1: a route in server/src/modules/repos/routes.ts that queries Drizzle directly without workspace scope + a shared client component that imports a route-private _components folder and calls useState after an early return + a harmless pure helper; eval 2: the helper and a small formatter tweak only). Run real installs in the worktree (pnpm in client/ and server/, npm ci in reviewer-core/): symlinked node_modules break dependency-cruiser's baseline matching. Tell eval subagents not to push or call gh, and to return the report as text (they cannot write report files). Baseline runs must be told not to use or read this skill - project skills are auto-discovered.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "seeded-violations-open-pr",
+      "prompt": "I'm done with the pulls-count work on this branch. Open a PR against psr-eval-base.",
+      "expected_output": "BLOCKED. Finds the route that queries Drizzle directly without workspace scoping (backend-onion-architecture / security) and the shared component that imports a route-private _components folder and calls useState after an early return (frontend-ui-architecture / react-best-practices). Both arch:check gates reported as failed. No PR is opened. The pure helper is not flagged as critical.",
+      "files": [],
+      "assertions": [
+        "Verdict is BLOCKED: the agent refuses to open the PR",
+        "Flags the new /repos/:id/pulls-count route querying Drizzle directly from routes.ts as a blocking/critical problem",
+        "Notes that the new query is not scoped by workspaceId (cross-workspace data exposure)",
+        "Flags RunCostBadge importing from the route-private _components folder (shared code importing a route)",
+        "Flags useState being called after an early return (conditional hook) in RunCostBadge",
+        "Reports that server arch:check AND client arch:check were run and failed",
+        "Each blocking finding names the project skill/rule it comes from",
+        "The pure splitFullName helper is NOT reported as a critical/blocking problem",
+        "A machine-readable verdict was recorded (record-verdict --check reports BLOCKED)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "clean-change-open-pr",
+      "prompt": "ok this one is small, ship it - make a PR into psr-eval-base",
+      "expected_output": "PASS with zero critical findings; all four gates pass; verdict recorded; proceeds to the PR step.",
+      "files": [],
+      "assertions": [
+        "Verdict is PASS: the agent proceeds to the PR step and states the PR-creation command it would run",
+        "Zero critical/blocking findings are reported",
+        "Reports that arch:check and typecheck were run for both client and server and passed",
+        "States which project skills were applied to which side (UI skills on the client file, backend skills on the server file)",
+        "A machine-readable verdict was recorded (record-verdict --check reports PASS)"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "real-branch-manual-review",
+      "prompt": "Перед тим як відкривати PR, зроби self review моїх локальних змін на цій гілці.",
+      "expected_output": "Reviews commits + uncommitted + untracked changes against origin/main, routes client files to UI skills and server files to backend skills, runs the gates, reports in Ukrainian with a clear PASS/BLOCKED verdict.",
+      "files": [],
+      "assertions": [
+        "The report is written in Ukrainian",
+        "Review scope includes committed, uncommitted AND untracked changes relative to origin/main",
+        "Report states an explicit PASS or BLOCKED verdict",
+        "Report lists which project skills were run on which files (UI skills on client/, backend skills on server/)",
+        "Reports results of arch:check and typecheck for client and server",
+        "Does not open a PR or push (manual review stops after the report)",
+        "A machine-readable verdict was recorded for the checkout"
+      ]
+    }
+  ]
+}

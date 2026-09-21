@@ -7,6 +7,7 @@ Stack on top of the root: Tailwind 4 · recharts · mermaid · react-markdown ·
 pnpm dev          # :3000; API from NEXT_PUBLIC_API_BASE (default http://localhost:3001)
 pnpm test         # vitest + jsdom, fetch is mocked — no API needed
 pnpm typecheck
+pnpm arch:check   # import boundaries (.dependency-cruiser.cjs); also runs in CI
 ```
 
 ## Map
@@ -24,6 +25,7 @@ pnpm typecheck
 - Copy only via `useTranslations("<namespace>")`; a new feature = a new `messages/en/<feature>.json`.
 - Components never call `fetch` directly — only hooks from `src/lib/hooks`.
 - Import UI primitives only from the `@devdigest/ui` barrel, never from files inside it.
+- Import a component folder through its `index.ts`; routes never import from another route, and `src/components` / `src/lib` never import from `src/app` — enforced by `pnpm arch:check`. Where things go: the `frontend-ui-architecture` skill.
 - Components must render in both themes (`data-theme="dark" | "light"`).
 
 ## Gotchas

@@ -1,0 +1,66 @@
+{
+  "skill_name": "backend-onion-architecture",
+  "evals": [
+    {
+      "id": 1,
+      "name": "plan-new-backend-module",
+      "prompt": "In server/ I need a new 'notes' module: a reviewer can attach a free-text note to a pull request, list notes for a PR, and delete their own note. A note can't be longer than 2000 characters and can't be added to a PR whose status is 'closed'. When a note is added we should also post it to GitHub as a PR comment if a GitHub token is configured, but never fail the request if GitHub is down. Don't write the implementation - give me the exact file plan under server/src/modules/notes and server/test: which files, what goes in each, what each one imports, and how it is wired and tested. Explain the reasoning briefly.",
+      "expected_output": "Files mapped to rings: domain.ts (Note type, MAX length constant or rule, canAddNote rule as a pure function), ports.ts (NoteStore with workspaceId-first methods, a narrow PR lookup port, lazy GitHub client factory), service.ts taking a deps object (not the Container) and owning the 'GitHub failure never fails the request' policy, repository.ts as the only Drizzle importer returning domain types, helpers.ts with toNoteDto, compose.ts with buildNotesService(container), routes.ts with params/body/response Zod schemas calling one service method each. PR status read through a port filled from container.reviewRepo (no import of modules/pulls). Length limit enforced by the route's Zod body schema; closed-PR rule in domain/service throwing an error class from platform/errors.ts (no numeric status). Tests: domain unit test, service unit test with in-memory NoteStore + MockGitHubClient (no Docker), *.it.test.ts for the repository/route. Registration in modules/index.ts, table via pnpm db:generate, finish with pnpm arch:check.",
+      "files": [],
+      "expectations": [
+        "Proposes a repository.ts and states it is the only file in the module importing drizzle-orm / src/db",
+        "The service constructor takes a narrow deps object of ports, not the Container",
+        "Includes a compose.ts (or equivalent module-level wiring function) that builds the service from the container, and routes.ts does not import the repository",
+        "Places the closed-PR rule in domain.ts or service.ts as logic independent of HTTP, and the 'GitHub down must not fail the request' policy in the service, not the route handler",
+        "Gets pull-request data through a port supplied by the container (e.g. reviewRepo) rather than importing another module's folder",
+        "Routes declare Zod schemas including a response schema and return a DTO mapped by a pure helper",
+        "Errors are thrown as classes from platform/errors.ts with no reply.code() and no hand-picked numeric status in inner rings",
+        "Plans a service unit test using an in-memory store fake and adapter mocks that runs without Docker, plus an *.it.test.ts for the repository",
+        "Mentions running pnpm arch:check"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "review-backend-structure-violations",
+      "prompt": "Review this proposed server change for structure only (not code style). 1) modules/agents/service.ts adds `import { eq } from 'drizzle-orm'` and `import * as t from '../../db/schema.js'` to run a quick count query. 2) modules/reviews/service.ts adds `import { AGENT_DEFAULTS } from '../agents/constants.js'`. 3) modules/repos/routes.ts adds a handler that calls `app.container.git.clone(...)` directly and then `reply.code(502)` if it throws. 4) A new modules/pulls/domain.ts exports `type PullRow = typeof schema.pullRequests.$inferSelect` via `import type * as schema from '../../db/schema.js'`. 5) modules/settings/service.ts reads `process.env.OPENAI_API_KEY` as a fallback when container.secrets returns nothing. 6) server/src/platform/container.ts imports `../adapters/github/octokit.js`. 7) A PR author ran `pnpm arch:baseline` so CI goes green. Which of these are problems, which rule does each break, and what is the concrete fix?",
+      "expected_output": "1 violation: only repositories touch drizzle/db - move the count into AgentsRepository behind a port method. 2 violation: no cross-module imports - promote the constant to modules/_shared or expose via a port on the container. 3 violation: routes call services only, and no reply.code for error paths - move the clone into the service via the GitClient port and let the adapter/service throw ExternalServiceError. 4 violation: domain files are pure and `import type` counts - declare a real domain type and map in the repository. 5 violation: secrets only through the SecretsProvider port; env fallback lives in adapters/secrets/local.ts. 6 is fine: container.ts is the composition root and the only place adapters are constructed. 7 is a process violation: the baseline may only shrink; regenerating it to absorb new violations defeats the gate - check the baseline diff is deletions only and fix the imports instead.",
+      "files": [],
+      "expectations": [
+        "Flags item 1 and says the query belongs in the repository",
+        "Flags item 2 as a cross-module import and proposes _shared or a container-exposed port",
+        "Flags item 3 on both counts: adapter use in a route, and reply.code / status chosen in the route; proposes an error class such as ExternalServiceError",
+        "Flags item 4 and explicitly notes that type-only imports of the schema still violate the rule",
+        "Flags item 5 and points to the SecretsProvider port / adapters/secrets/local.ts as the only key read site",
+        "States that item 6 is NOT a violation because container.ts is the composition root",
+        "Flags item 7: the baseline must not be regenerated to hide new violations"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "extract-fat-route-handler",
+      "prompt": "server/src/modules/settings/routes.ts queries the database directly from its handlers (select + insert…onConflictDoUpdate on the settings table) and also calls container.llm(provider).listModels() for the test-connection endpoint. I only need to add one new field, `default_review_strategy`, to the settings PUT endpoint. How should I approach this given the module's current shape? Give me the steps and the resulting file layout - no full implementation.",
+      "expected_output": "Does not rewrite the whole module unasked, but does not add more SQL to the handler either: extracts the settings read/upsert touched by this change into a SettingsRepository (verbatim queries, workspaceId-scoped), introduces a SettingsService with a narrow deps object and compose.ts, thins the PUT handler to parse → call → return with body and response schemas, leaves the unrelated test-connection handler alone (or notes it as follow-up). Contract change (SettingsUpdate / Settings) made in BOTH copies of @devdigest/shared. Column added via pnpm db:generate, never by editing migrations. Existing integration test kept green as the safety net; adds a service unit test with an in-memory store. Runs pnpm arch:check then pnpm arch:baseline and verifies the baseline diff is deletions only.",
+      "files": [],
+      "expectations": [
+        "Scopes the refactor to the code being touched instead of restructuring the entire module, and says so",
+        "Moves the settings queries into a repository rather than adding another Drizzle call to routes.ts",
+        "Introduces a service with a deps object and module-level wiring (compose.ts), not a Container-taking service",
+        "Mentions changing the contract in both server and client copies of @devdigest/shared",
+        "Schema change goes through pnpm db:generate; migrations folder is not hand-edited",
+        "Keeps behaviour unchanged and uses the existing integration test as the safety net",
+        "Ends with pnpm arch:check and re-recording the baseline with a deletions-only check"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "negative-frontend-placement",
+      "prompt": "In client/ I want to add a small hook that formats a run's cost for display and is used by two components on the PR detail page. Where should it live?",
+      "expected_output": "The backend-onion-architecture skill should NOT be the one answering; this is a frontend placement question covered by frontend-ui-architecture. The answer places a pure formatting function in a helpers.ts at the route-segment level (it is not a hook unless it calls hooks).",
+      "files": [],
+      "expectations": [
+        "Does not apply backend ring vocabulary (repository, port, adapter, compose.ts) to the client question",
+        "Answers using the frontend placement conventions (route-segment helpers / shared component scope)"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,7 @@ pnpm exec vitest run --exclude '**/*.it.test.ts'      # unit, no Docker
 pnpm exec vitest run .it.test                         # integration, needs Docker
 pnpm db:generate / db:migrate / db:seed
 pnpm typecheck
+pnpm arch:check                                       # import-boundary gate (Onion rings), also in CI
 ```
 
 ## Map

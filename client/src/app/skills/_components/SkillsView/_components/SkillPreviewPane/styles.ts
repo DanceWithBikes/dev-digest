@@ -1,0 +1,72 @@
+import type { CSSProperties } from "react";
+
+/** Co-located styles for SkillPreviewPane. */
+export const s = {
+  pane: { padding: 20 } satisfies CSSProperties,
+  headerRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 6 } satisfies CSSProperties,
+  name: {
+    fontSize: 14,
+    fontWeight: 700,
+    flex: 1,
+    minWidth: 0,
+    wordBreak: "break-word",
+  } satisfies CSSProperties,
+  metaRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 } satisfies CSSProperties,
+  typePill: (color: string): CSSProperties => ({
+    fontSize: 10.5,
+    fontWeight: 600,
+    color,
+    background: color + "1a",
+    padding: "1px 7px",
+    borderRadius: 4,
+  }),
+  description: {
+    fontSize: 13,
+    color: "var(--text-secondary)",
+    lineHeight: 1.5,
+    marginBottom: 16,
+  } satisfies CSSProperties,
+  bodyLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.07em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+    marginBottom: 8,
+  } satisfies CSSProperties,
+  body: {
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    background: "var(--bg-elevated)",
+    padding: 14,
+    fontSize: 13,
+    lineHeight: 1.55,
+    overflowX: "auto",
+  } satisfies CSSProperties,
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+    flexWrap: "wrap",
+  } satisfies CSSProperties,
+  openLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    padding: "5px 9px",
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    fontSize: 12.5,
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+    textDecoration: "none",
+  } satisfies CSSProperties,
+  spacer: { flex: 1 } satisfies CSSProperties,
+  attachHint: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+    marginTop: 14,
+    lineHeight: 1.45,
+  } satisfies CSSProperties,
+} as const;

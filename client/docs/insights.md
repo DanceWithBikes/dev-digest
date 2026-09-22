@@ -27,6 +27,12 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Tool & Library Notes
 
+- **2026-09-21 · `Intl.DateTimeFormat` with `month: "short"` is not test-stable — Node renders September as `Sept`** — An assertion expecting `Sep` failed under en-GB CLDR, which abbreviates September with four letters while every other month gets three. Do not "fix" it by pinning a locale in the component; formatted dates in list UIs here use `toISOString().slice(0, 16)` instead — deterministic, timezone-proof and sortable, which is what a version list needs anyway.
+  Where: `src/app/skills/[id]/_components/SkillDetail/_components/SkillVersionsTab/helpers.ts` (the date formatter)
+
+- **2026-09-21 · `DiffViewer` is reusable outside PR review, but only through a synthetic `PrFile`** — It was built for GitHub patches, so it consumes `PrFile[]` whose `patch` is already unified-diff TEXT and does no diffing of its own. To diff two arbitrary strings (e.g. an old skill body against the current one) you supply the missing half yourself: an LCS line diff → a unified-diff string → a `PrFile` with a synthetic path and real add/del counts. Reference implementation with tests is the skill-versions helper; copy that rather than reaching for a diff dependency. It emits one whole-body hunk with no context trimming on purpose — hiding unchanged paragraphs from someone deciding whether to restore is the wrong economy — and falls back to a whole-body replace past `DIFF_MAX_LINES` so an O(n·m) table is never allocated.
+  Where: `src/components/diff-viewer` (`DiffViewer`), `src/app/skills/[id]/_components/SkillDetail/_components/SkillVersionsTab/helpers.ts` (`diffLines`, `toUnifiedDiff`, `toDiffFile`)
+
 - **2026-09-21 · dependency-cruiser substitutes `$1` unescaped — a captured `[repoId]` silently breaks the rule** — The "enter a component folder through its `index.ts`" rule needs "target is outside the importer's own folder", i.e. capture the importer's directory in `from.path` and use `pathNot: '$1/'`. With `from: '^(.+)/[^/]+$'` every `index.ts → ./Name.tsx` under a dynamic segment was flagged (25 false positives) while bracket-free routes were fine: `$1` is pasted into the target regex as-is, so `[repoId]` becomes a character class that never matches the literal folder. Capture only the bracket-free tail instead — `from: { path: '([^\\[\\]]+)/[^/]+$' }` (unanchored, so the match starts right after the last `]`) with `pathNot: '$1/'`; files sitting directly in a `[dynamic]` folder (page.tsx, segment helpers) can't satisfy that pattern and get their own rule. Second trap: a pattern with nested quantifiers (`^(?:.*\\][^/]*/)?(…)`) aborts the whole run with `has an unsafe regular expression. Bailing out.` — keep star height at 1. When adding a rule, prove it fires: drop a throwaway `__arch_probe.ts` with the bad import, run `pnpm arch:check`, delete it. Route groups `(name)` would hit the same unescaped-`$1` problem.
   Where: `.dependency-cruiser.cjs:65` (`from.path` of `enter-route-components-through-index`), `.dependency-cruiser.cjs:20` (`FOLDER_SHARED_FILES`), `package.json:10` (`arch:check`), `../.github/workflows/client.yml:53`
 
@@ -34,6 +40,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/styles.ts:12` (`borderTopColor`; Right/Bottom at `:13`/`:14`, `borderLeftColor` at `:17`)
 
 ## Recurring Errors & Fixes
+
+- **2026-09-21 · A brand-new route fails `pnpm typecheck` until Next regenerates its route types** — Adding `src/app/skills/page.tsx` made typecheck fail with `.next/types/validator.ts(104,52): error TS2344: Type '"/skills"' does not satisfy the constraint 'AppRoutes'`. The error is in a GENERATED file, not in your code: typed routes come from `.next/types/validator.ts`, which only lists routes Next has compiled, so a route that has never been requested doesn't exist as far as `tsc` is concerned. Fix: with `pnpm dev` running, request the new route once (`curl http://localhost:3000/skills`) — Next compiles it, rewrites the validator, and typecheck passes; `pnpm build` does the same, slower. Do NOT "fix" it by editing `.next/**` or by loosening the route type. Expect this on every new route, and in CI whenever typecheck runs before a build. (×1)
+  Where: no code anchor — the generated `.next/types/validator.ts`; trigger: `src/app/skills/page.tsx:1` (the new route)
 
 ## Session Notes
 

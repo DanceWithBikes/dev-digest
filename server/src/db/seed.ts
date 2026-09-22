@@ -6,7 +6,11 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import { FIXTURE_PRS } from './seed-fixtures.js';
+import { buildSeedSkills, RETIRED_SKILL_NAMES } from './seed-skills.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -21,7 +25,10 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  * with a few findings, and the three built-in agents (General + Security +
  * Performance), all on the default openrouter/deepseek-v4-flash provider+model.
  *
- * Course lessons populate the other tables (skills, conventions, memory, eval,
+ * L02 adds the Skills Lab: the built-in skills, the Test Quality / API Contract
+ * reviewers, and the two fixture PRs (#483, #484) the control experiment runs on.
+ *
+ * Later course lessons populate the remaining tables (conventions, memory, eval,
  * …) once their features are built — they start empty here.
  */
 
@@ -211,6 +218,28 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       version: 1,
       createdBy: userId,
     },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description: 'Reviews the tests: uncovered branches, missed edge cases, over-mocking, flakes.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
+    {
+      workspaceId,
+      name: 'API Contract Reviewer',
+      description: 'Detects breaking changes to route signatures and response shapes.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
   ];
   for (const a of seedAgents) {
     const [existing] = await db
@@ -220,7 +249,123 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     if (!existing) await db.insert(t.agents).values(a);
   }
 
+  await seedSkills(db, workspaceId);
+  await seedFixturePrs(db, workspaceId, repoId);
+
   return { workspaceId, userId };
+}
+
+/**
+ * L02 — the control-experiment PRs (#483, #484). Idempotent by `(repoId, number)`.
+ *
+ * Unlike the demo PR #482, every file here carries a real unified-diff `patch`:
+ * `diffFromPrFiles` drops patch-less files, so without one the agents would
+ * review an empty diff and the with/without-skills comparison would show
+ * nothing. See `seed-fixtures.ts`.
+ */
+async function seedFixturePrs(db: Db, workspaceId: string, repoId: string): Promise<void> {
+  for (const fx of FIXTURE_PRS) {
+    const [existing] = await db
+      .select()
+      .from(t.pullRequests)
+      .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, fx.number)));
+    if (existing) continue;
+
+    const [pr] = await db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId,
+        number: fx.number,
+        title: fx.title,
+        author: fx.author,
+        branch: fx.branch,
+        base: fx.base,
+        headSha: fx.headSha,
+        additions: fx.files.reduce((n, f) => n + f.additions, 0),
+        deletions: fx.files.reduce((n, f) => n + f.deletions, 0),
+        filesCount: fx.files.length,
+        status: 'needs_review',
+        body: fx.body,
+      })
+      .returning();
+
+    await db.insert(t.prFiles).values(
+      fx.files.map((f) => ({
+        prId: pr!.id,
+        path: f.path,
+        additions: f.additions,
+        deletions: f.deletions,
+        patch: f.patch,
+      })),
+    );
+
+    await db.insert(t.prCommits).values({
+      prId: pr!.id,
+      sha: fx.commitSha,
+      message: fx.commitMessage,
+      author: fx.author,
+    });
+  }
+}
+
+/**
+ * L02 — persist the built-in skills and their agent links.
+ *
+ * The catalogue itself (bodies, descriptions, attachment order) lives in
+ * `seed-skills.ts`; this function only writes it.
+ *
+ * Idempotent by `(workspaceId, name)`. NOTE this bypasses `SkillsRepository`,
+ * so the v1 `skill_versions` snapshot is written explicitly — otherwise a
+ * seeded skill would claim `version: 1` with no history behind it.
+ */
+async function seedSkills(db: Db, workspaceId: string): Promise<void> {
+  const seedSkillRows = buildSeedSkills();
+
+  for (const name of RETIRED_SKILL_NAMES) {
+    await db
+      .delete(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, name)));
+  }
+
+  for (const sk of seedSkillRows) {
+    let [row] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, sk.name)));
+
+    if (!row) {
+      [row] = await db
+        .insert(t.skills)
+        .values({
+          workspaceId,
+          name: sk.name,
+          description: sk.description,
+          type: sk.type,
+          source: sk.source ?? 'manual',
+          body: sk.body,
+          enabled: true,
+          version: 1,
+        })
+        .returning();
+      await db
+        .insert(t.skillVersions)
+        .values({ skillId: row!.id, version: 1, body: sk.body })
+        .onConflictDoNothing();
+    }
+
+    for (const link of sk.attachTo) {
+      const [agent] = await db
+        .select()
+        .from(t.agents)
+        .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, link.agent)));
+      if (!agent) continue;
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId: agent.id, skillId: row!.id, order: link.order })
+        .onConflictDoNothing();
+    }
+  }
 }
 
 // CLI entrypoint

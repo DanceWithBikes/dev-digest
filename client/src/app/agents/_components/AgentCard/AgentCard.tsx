@@ -1,13 +1,14 @@
-/* AgentCard — model chip, skills count, enabled toggle. Stats are an A5 mount;
-   we render the provider/model + skill count here. */
+/* AgentCard — provider + model chips, skills count, enabled toggle. Stats are an
+   A5 mount; we render the provider/model + skill count here. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Icon, Badge, Toggle } from "@devdigest/ui";
+import { Button, Icon, Badge, Modal, Toggle } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
 import { useDeleteAgent } from "../../../../lib/hooks/agents";
 import { modelColor } from "./helpers";
+import { DELETE_MODAL_WIDTH } from "./constants";
 import { s } from "./styles";
 
 export function AgentCard({
@@ -25,7 +26,14 @@ export function AgentCard({
 }) {
   const t = useTranslations("agents");
   const del = useDeleteAgent();
+  const [confirming, setConfirming] = React.useState(false);
   const color = modelColor(ag.model);
+
+  const confirmDelete = () => {
+    del.mutate(ag.id);
+    setConfirming(false);
+  };
+
   return (
     <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
       <div style={s.headerRow}>
@@ -41,25 +49,21 @@ export function AgentCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete agent "${ag.name}"? This cannot be undone.`)) del.mutate(ag.id);
+            setConfirming(true);
           }}
           disabled={del.isPending}
-          title="Delete agent"
-          aria-label="Delete agent"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: del.isPending ? "not-allowed" : "pointer",
-            color: "var(--text-muted)",
-            display: "inline-flex",
-            padding: 4,
-          }}
+          title={t("card.delete.action")}
+          aria-label={t("card.delete.action")}
+          style={s.deleteBtn(del.isPending)}
         >
-          <Icon.Trash size={14} style={del.isPending ? { animation: "ddspin 1s linear infinite" } : undefined} />
+          <Icon.Trash size={14} style={del.isPending ? s.deleteSpinner : undefined} />
         </button>
       </div>
       <div style={s.description}>{ag.description || t("card.noDescription")}</div>
       <div style={s.metaRow}>
+        {/* Provider + model together: the same model name can be served by more
+            than one provider, so the model alone doesn't identify the LLM. */}
+        <span style={s.providerChip}>{ag.provider}</span>
         <span className="mono" style={s.modelChip(color)}>
           {ag.model}
         </span>
@@ -69,6 +73,32 @@ export function AgentCard({
           </Badge>
         )}
       </div>
+
+      {confirming && (
+        // The card itself is clickable; keep modal clicks from selecting the agent.
+        <div onClick={(e) => e.stopPropagation()}>
+          <Modal
+            width={DELETE_MODAL_WIDTH}
+            title={t("card.delete.title")}
+            onClose={() => setConfirming(false)}
+            footer={
+              <div style={s.deleteFooter}>
+                <Button kind="ghost" onClick={() => setConfirming(false)}>
+                  {t("card.delete.cancel")}
+                </Button>
+                <Button kind="danger" icon="Trash" onClick={confirmDelete} disabled={del.isPending}>
+                  {del.isPending ? t("card.delete.deleting") : t("card.delete.confirm")}
+                </Button>
+              </div>
+            }
+          >
+            <div style={s.deleteBody}>
+              <div>{t("card.delete.body", { name: ag.name })}</div>
+              <div style={s.deleteHint}>{t("card.delete.hint")}</div>
+            </div>
+          </Modal>
+        </div>
+      )}
     </div>
   );
 }

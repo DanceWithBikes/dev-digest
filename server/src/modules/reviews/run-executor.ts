@@ -5,8 +5,8 @@ import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
-import { REVIEW_STRATEGY } from './constants.js';
-import { taskLine } from './helpers.js';
+import { CHARS_PER_TOKEN, REVIEW_STRATEGY } from './constants.js';
+import { selectSkillBodies, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
@@ -150,6 +150,10 @@ export class ReviewRunExecutor {
     // (built from the buffer) includes them too.
     const runLog = parentLog.forRun(runId, { agent: agent.name });
 
+    // Captured outside the try so a failure AFTER assembly still shows the
+    // skills the run actually sent, rather than an empty block.
+    let skillsForTrace: string | null = null;
+
     runLog.info(`Starting review with agent "${agent.name}" (${agent.provider}/${agent.model})`);
 
     try {
@@ -183,6 +187,10 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // The agent's configured skills — the `## Skills / rules` prompt section.
+      const skills = await this.buildSkillBodies(agent.id, runLog);
+      skillsForTrace = skills.length > 0 ? skills.join('\n\n') : null;
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -195,6 +203,9 @@ export class ReviewRunExecutor {
         // Per-agent review strategy (configured in the Agent editor); falls back
         // to the studio default. single-pass = whole diff in one call.
         strategy: agent.strategy ?? REVIEW_STRATEGY,
+        // L02 — the agent's attached, enabled skills. Same omit-when-empty
+        // contract: an agent with no skills produces the pre-L02 prompt exactly.
+        ...(skills.length > 0 ? { skills } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -308,7 +319,7 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
+        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, skillsForTrace))
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
@@ -326,6 +337,31 @@ export class ReviewRunExecutor {
    * rows per `getCallerSignatures` call) so the section stays under ~600
    * tokens even on heavy PRs.
    */
+  /**
+   * The agent's skill bodies for the prompt's `## Skills / rules` slot:
+   * attached (`agent_skills`) AND globally enabled, in link order.
+   *
+   * Deliberately NOT wrapped in try/catch, unlike the repo-intel digests below.
+   * Those are best-effort enrichment — losing them degrades a review. Skills
+   * are the agent's configuration: a run that silently drops them is
+   * indistinguishable from a correctly-configured run that found nothing, which
+   * is exactly the confusion this feature exists to remove. Let it throw into
+   * the per-agent catch, which records the run as failed with the reason.
+   */
+  private async buildSkillBodies(agentId: string, runLog: RunLogger): Promise<string[]> {
+    const links = await this.agents.linkedSkills(agentId);
+    const bodies = selectSkillBodies(links);
+    const skipped = links.length - bodies.length;
+    const approxTokens = Math.ceil(bodies.join('\n\n').length / CHARS_PER_TOKEN);
+    const names = links.filter((l) => l.skill.enabled).map((l) => l.skill.name);
+    runLog.info(
+      `skills: ${bodies.length} of ${links.length} linked skill(s) attached (~${approxTokens} tokens)` +
+        (names.length > 0 ? `: ${names.join(', ')}` : '') +
+        (skipped > 0 ? ` — ${skipped} skipped (disabled globally)` : ''),
+    );
+    return bodies;
+  }
+
   private async buildCallersDigest(
     repoId: string,
     diff: UnifiedDiff,
@@ -413,6 +449,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     grounding: string,
     durationMs = 0,
+    skills: string | null = null,
   ): RunTrace {
     return {
       config: {
@@ -424,7 +461,7 @@ export class ReviewRunExecutor {
         source: 'local',
       },
       stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
-      prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
+      prompt_assembly: { system: agent.systemPrompt, skills, memory: null, specs: null, user: '' },
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],

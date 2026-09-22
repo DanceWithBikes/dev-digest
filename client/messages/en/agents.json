@@ -1,7 +1,16 @@
 {
   "card": {
     "noDescription": "No description",
-    "skillCount": "{count} skills"
+    "skillCount": "{count} skills",
+    "delete": {
+      "action": "Delete agent",
+      "title": "Delete agent",
+      "body": "Delete “{name}”? This cannot be undone.",
+      "hint": "Its reviews stay, but the agent can no longer be run.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "deleting": "Deleting…"
+    }
   },
   "list": {
     "breadcrumbLab": "Skills Lab",
@@ -62,7 +71,7 @@
     "modelEmptyHint": "No models loaded — set the {provider} API key in Settings → API Keys.",
     "modelSearch": "Search models…",
     "systemPrompt": "System prompt",
-    "systemPromptHint": "Loaded as the static system message. Enabled skills are appended below it.",
+    "systemPromptHint": "Loaded as the static system message. Attached, enabled skills are appended below it as “## Skills / rules”.",
     "outputSchema": "Output schema",
     "outputSchemaOption": "Standard findings JSON",
     "strategy": "Review strategy",
@@ -89,9 +98,17 @@
   },
   "skills": {
     "title": "Skills",
-    "enabledCount": "{linked} of {total} enabled",
+    "attachedCount": "{linked} of {total} attached",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach."
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Drag the handle or use the arrows to reorder; only attached skills can be reordered. The checkbox attaches a skill to this agent; the toggle enables or disables it everywhere — a disabled skill is never sent, even when attached.",
+    "dragHandle": "Reorder {name}",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "attach": "Attach {name}",
+    "enabledToggle": "Enable {name} for every agent",
+    "disabledGlobally": "disabled — never sent",
+    "empty": "No skills yet. Create one in the Skills Lab, then attach it here.",
+    "loadError": "Could not load skills."
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

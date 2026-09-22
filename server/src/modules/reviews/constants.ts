@@ -10,3 +10,10 @@
  * model's context.
  */
 export const REVIEW_STRATEGY = 'single-pass' as const;
+
+/**
+ * Rough chars-per-token ratio, used only to put an order-of-magnitude token
+ * figure next to the skills line in the Live Log. The container's tokenizer
+ * would be exact, but this is a log line, not a billing number.
+ */
+export const CHARS_PER_TOKEN = 4;

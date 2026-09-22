@@ -135,8 +135,7 @@ Onion Architecture pays off for long-lived code with real behaviour; applied bli
 
 Recorded in `server/.dependency-cruiser-known-violations.json`. Leave them alone unless you are working in that file, and never use them as precedent:
 
-- **No module has a `domain.ts`, `ports.ts` or `compose.ts` yet** - the first one to need them establishes the pattern; there is no in-repo example to copy for those three. `modules/repos/` is the reference for everything else (thin routes, a service holding the rules, a repository owning the SQL), but its service still takes the `Container`.
-- `pulls`, `settings`, `polling`, `workspace` query the database from `routes.ts`. The model to copy is `modules/repos/`.
+- **`modules/conventions/` and `modules/pulls/` are the full reference** - `domain.ts`, `ports.ts`, `repository.ts`, `service.ts` taking a deps object, and a `compose.ts` that is the only file seeing the `Container`. `modules/repos/` is still a good model for thin routes and a repository owning the SQL, but its service takes the `Container` - do not copy that part.
 - Every existing service takes the `Container`; `reviews` and `repos/helpers.ts` pass Drizzle row types across rings (`src/db/rows.ts`).
 - `repo-intel` calls `node:fs` and imports `src/adapters/**` directly; two adapters import `repo-intel/constants.ts`.
 - `AppError` carries `statusCode`. Until the mapping moves into the error handler, rule 9 is how new code stays clean.

@@ -7,7 +7,7 @@
 
 ## Layers inside a module (Onion rings — imports point inwards only)
 `routes.ts` (HTTP, zod schemas) → `service.ts` (use cases) → `repository.ts` (SQL) + `ports.ts` (interfaces) + `domain.ts`/`helpers.ts` (pure) + `constants.ts` (literals) + `compose.ts` (wiring).
-A module with no DB access and no rules may live in a single `routes.ts` — the first query means a `repository.ts` and a `service.ts`. Copy `repos/`, never `pulls/`.
+A module with no DB access and no rules may live in a single `routes.ts` — the first query means a `repository.ts` and a `service.ts`. Copy `conventions/` (the full set, incl. `ports.ts`/`compose.ts`) or `pulls/`; `repos/` is clean apart from its service still taking the `Container`.
 Full ring map, ports, transactions, testing: the `backend-onion-architecture` skill.
 
 ## Rules

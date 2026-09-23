@@ -1,0 +1,23 @@
+[
+  {"query": "i'm adding a 'Run cost breakdown' block to the PR detail page in client/src/app/repos/[repoId]/pulls/[number]. there's a table component, a threshold const (0.5 usd), a groupRunsByAgent fn and a provider label map. where should each of these files go? we'll maybe reuse the grouping on the agents page later", "should_trigger": true},
+  {"query": "FindingsTab.tsx розрісся до 400 рядків - там і фільтри, і таймлайн, і модалка підтвердження. Як його краще розбити на підкомпоненти і хуки, і куди покласти нові файли?", "should_trigger": true},
+  {"query": "Should AgentCard move from app/agents/_components to src/components now that the PR list row also needs to show it? right now PRRow just imports it from '@/app/agents/_components/AgentCard/AgentCard' and it works fine", "should_trigger": true},
+  {"query": "Review the structure of my PR before I push: I added src/components/index.ts that re-exports everything so imports are shorter, plus a new useSortedFindings in lib/hooks/core.ts. anything wrong with how the files are organised?", "should_trigger": true},
+  {"query": "we have formatDuration copy-pasted in 3 places (RunHistory, RunTraceDrawer, AgentCard helpers). where's the right home for it - lib/? utils? and what's the difference between a helpers.ts and a util anyway", "should_trigger": true},
+  {"query": "new route /repos/[repoId]/insights - scaffold the folder layout for me: page, a view component, a couple of sub-components, constants, a hook for URL filters. Next 15 app router, follow whatever the rest of client/ does", "should_trigger": true},
+  {"query": "де в нас має жити бізнес-логіка визначення outcome для run (passed/blocked/failed)? зараз вона прямо в RunHistory.tsx разом з кольорами та іконками, і ще схожа штука є у VerdictBanner", "should_trigger": true},
+  {"query": "client/src/app/repos/[repoId]/pulls/[number]/page.tsx is almost 200 lines with like ten hooks in it. is that ok for a next.js page? what should a page.tsx contain vs the _components stuff", "should_trigger": true},
+  {"query": "is it fine for src/lib/model-label.ts to import MODEL_COLOR from app/agents/_components/AgentCard/constants? ts compiles, but it feels off. what's the rule for who can import from whom in the client", "should_trigger": true},
+  {"query": "barrel files: a teammate says every folder index.ts is an anti-pattern and wants to delete them all from client/src/components. is he right? what should our policy be for index.ts in this codebase", "should_trigger": true},
+  {"query": "FindingsPanel re-renders on every keystroke in the filter input and the list has ~300 cards, so typing lags. how do I find what's causing it and fix it - memo? useDeferredValue?", "should_trigger": false},
+  {"query": "my useEffect in RunTraceDrawer that subscribes to the SSE log stream fires twice in dev and I get duplicated log lines. how do I fix the cleanup", "should_trigger": false},
+  {"query": "add generateMetadata to the PR detail page so the browser tab shows the PR number and title. params is a promise in next 15 right?", "should_trigger": false},
+  {"query": "write RTL tests for SeverityPills: clicking a pill toggles the filter, pills with zero count are disabled. we use vitest + jsdom", "should_trigger": false},
+  {"query": "In server/src/modules/pulls the routes.ts runs a drizzle query directly. where should that query live and how do I wire the repository through the container? pnpm arch:check is failing on it", "should_trigger": false},
+  {"query": "zod schema for the create-agent form: name 3-60 chars, model must be one of the selected provider's models, system_prompt required unless a template is chosen. how do I express the conditional part", "should_trigger": false},
+  {"query": "draw a mermaid sequence diagram of what happens when the user clicks Run review: client mutation hook, POST /runs, the executor, and SSE events back to the trace drawer", "should_trigger": false},
+  {"query": "the PR list table looks broken in light theme - the row hover background is almost invisible and a couple of borders use a hardcoded #222. fix the styles", "should_trigger": false},
+  {"query": "TS error in FindingsPopover: Type 'string | null' is not assignable to type 'Severity'. RunSummary.provider is string | null too. what's the cleanest way to narrow these without casting", "should_trigger": false},
+  {"query": "upgrade client from next 15.1 to 16 - what breaks for us? we use app router, next-intl and async params", "should_trigger": false},
+  {"query": "зроби щоб useAgents кешував список агентів на 5 хвилин і не рефетчив при поверненні фокусу на вкладку", "should_trigger": false}
+]

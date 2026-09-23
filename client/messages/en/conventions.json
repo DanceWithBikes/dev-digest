@@ -2,25 +2,64 @@
   "page": {
     "crumbLab": "Skills Lab",
     "crumbConventions": "Conventions",
-    "headingPrefix": "Conventions in ",
-    "repoFallback": "repo",
-    "subtitle": "Scan the cloned repo to surface house-rules — each backed by evidence you can turn into a Skill.",
+    "heading": "Conventions",
+    "subtitle": "Scan this repository for the house rules it already follows — each one backed by a file and a line you can check.",
+    "runScan": "Run Scan",
+    "rescan": "ReScan",
     "scanning": "Scanning…",
-    "rescan": "Re-scan",
-    "runExtraction": "Run extraction",
-    "extractionFailed": "Extraction failed",
-    "loadError": "Could not load conventions.",
+    "createSkill": "Create skill",
+    "scanDone": "Scan finished: {count} candidate(s) from {files} sampled file(s).",
+    "scanFailed": "The scan could not finish. Check that the repo is cloned and indexed, and that a model is configured under Settings → Feature Models.",
+    "loadError": "Could not load the convention candidates.",
+    "acceptedSection": "ACCEPTED · {count}",
+    "acceptedNote": "These rules go into the skill. Send one back to the candidates to decide on it later, or reject it to rule it out for good.",
+    "pendingSection": "CANDIDATES · {count}",
+    "skillCreated": "Skill “{name}” saved.",
     "empty": {
       "title": "No conventions extracted yet",
-      "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
-      "cta": "Run extraction"
+      "body": "A scan reads this repo's linter, formatter and tsconfig files plus its most-depended-on source files, then proposes the rules they demonstrate. Nothing is applied until you accept it."
     },
-    "candidateCount": "{count, plural, one {# candidate} other {# candidates}} · grounded against sampled files"
+    "allTriaged": {
+      "title": "Everything has been triaged",
+      "body": "Every candidate from the last scan was accepted or rejected. Re-scan to look for rules the first pass missed — rejected ones will not come back."
+    }
   },
   "card": {
-    "confidence": "Confidence",
+    "confidence": "Confidence {pct}",
     "accepted": "Accepted",
-    "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "accept": "Accept",
+    "unaccept": "Back to candidates",
+    "reject": "Reject",
+    "edit": "Edit",
+    "save": "Save",
+    "cancelEdit": "Cancel"
+  },
+  "category": {
+    "naming": "Naming",
+    "structure": "Structure",
+    "error-handling": "Error handling",
+    "testing": "Testing",
+    "typing": "Typing",
+    "imports": "Imports",
+    "formatting": "Formatting",
+    "other": "Other"
+  },
+  "createModal": {
+    "title": "Create a skill from these conventions",
+    "subtitle": "{count} accepted rule(s) will be written into one skill.",
+    "explainer": "This assembles the rules you accepted into a single skill an agent can be instructed with. The text below is a proposal — edit it before saving, because this body becomes literal instructions in the agent's prompt. Re-running this later updates the same skill instead of creating a second one.",
+    "loading": "Assembling the skill…",
+    "nameLabel": "Name",
+    "descriptionLabel": "Description",
+    "descriptionHint": "One directive line — this is what an agent reads to decide whether the skill applies.",
+    "agentLabel": "Attach to agent",
+    "agentHint": "The skill is appended to that agent's list, after its existing skills.",
+    "noAgent": "Don't attach it yet",
+    "bodyLabel": "Skill body (markdown)",
+    "bodyHint": "Every rule keeps its file and line so a reviewer can check the evidence behind it.",
+    "create": "Create",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "failed": "Could not create the skill."
   }
 }

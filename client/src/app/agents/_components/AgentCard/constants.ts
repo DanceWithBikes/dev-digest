@@ -7,3 +7,6 @@ export const MODEL_COLOR: Record<string, string> = {
   "gpt-4o-mini": "#8b5cf6",
   o1: "#f59e0b",
 };
+
+/** Width of the delete-confirmation modal — narrow: it holds one sentence. */
+export const DELETE_MODAL_WIDTH = 440;

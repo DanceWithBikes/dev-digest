@@ -10,6 +10,14 @@ export const LOG_HEIGHT = 420;
 export const TABS = ["trace", "log"] as const;
 export type TraceTab = (typeof TABS)[number];
 
+/**
+ * Characters per token for the approximate per-block token counts shown next to
+ * a prompt-assembly label. Mirrors `CHARS_PER_TOKEN` in
+ * server/src/modules/reviews/constants.ts, which the server uses for the same
+ * estimate in the run log — keep both in sync so the two numbers agree.
+ */
+export const CHARS_PER_TOKEN = 4;
+
 /** Prompt-assembly block accent colours (by leg). */
 export const PROMPT_COLORS = {
   system: "var(--text-muted)",

@@ -51,6 +51,7 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
 }));
 
 import RunTraceDrawer from "./RunTraceDrawer";
+import { approxTokens } from "./helpers";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -80,6 +81,34 @@ describe("A5 Run Trace drawer (smoke)", () => {
     fireEvent.click(screen.getByText("log"));
     // LiveLogStream renders its filter input
     expect(screen.getByPlaceholderText("Filter log…")).toBeInTheDocument();
+  });
+});
+
+describe("approxTokens", () => {
+  it("rounds up to whole tokens at 4 characters each", () => {
+    expect(approxTokens("")).toBe(0);
+    expect(approxTokens("abcd")).toBe(1);
+    expect(approxTokens("abcde")).toBe(2);
+    expect(approxTokens("### skill")).toBe(3);
+  });
+});
+
+describe("A5 Run Trace drawer — prompt assembly token counts", () => {
+  it("shows the skills block's OWN approximate token count", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    // The section is collapsed by default.
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    expect(screen.getByText("Skills (dynamic)")).toBeInTheDocument();
+    // "### skill" is 9 chars → ceil(9 / 4) = 3, not the run's 12k/1.5k totals.
+    expect(screen.getByText("~3 tokens")).toBeInTheDocument();
+  });
+
+  it("renders no skills block at all when the run assembled no skills", () => {
+    state.trace = { ...TRACE, prompt_assembly: { ...TRACE.prompt_assembly, skills: null } };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    expect(screen.queryByText("Skills (dynamic)")).not.toBeInTheDocument();
+    expect(screen.queryByText("~3 tokens")).not.toBeInTheDocument();
   });
 });
 

@@ -9,6 +9,31 @@ import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 // shared with the CI runner); re-exported here for backward-compatible imports.
 export { reduceReviews, sliceDiff } from '@devdigest/reviewer-core';
 
+/**
+ * A skill linked to an agent, as the agents repository returns it. Declared
+ * structurally so this file stays free of the data layer.
+ */
+export interface LinkedSkill {
+  skill: { name: string; body: string; enabled: boolean };
+  order: number;
+}
+
+/**
+ * The skill bodies that go into a run's prompt: attached to the agent AND
+ * globally enabled, in link order.
+ *
+ * Each body is rendered under its own `### <name>` heading so one skill reads
+ * as one block in the prompt, the run trace and the log — that is what makes
+ * "this skill was sent, that one wasn't" legible rather than inferred. The
+ * caller passes the result straight to `assemblePrompt`, which joins the array
+ * into the `## Skills / rules` section.
+ */
+export function selectSkillBodies(links: LinkedSkill[]): string[] {
+  return links
+    .filter((l) => l.skill.enabled)
+    .map((l) => `### ${l.skill.name}\n${l.skill.body}`);
+}
+
 export interface ReviewDtoFinding extends Finding {
   review_id: string;
   accepted_at: string | null;

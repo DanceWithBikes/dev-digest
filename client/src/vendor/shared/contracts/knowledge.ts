@@ -115,7 +115,13 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+export const SkillSource = z.enum([
+  'manual',
+  'imported_url',
+  'imported_file',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
 export const Skill = z.object({
@@ -128,8 +134,67 @@ export const Skill = z.object({
   enabled: z.boolean(),
   version: z.number().int(),
   evidence_files: z.array(z.string()).nullish(),
+  /**
+   * How many agents this skill is attached to. Derived from `agent_skills`, not
+   * stored: it is a join count, so persisting it would be a second source of
+   * truth that drifts the moment a link is added anywhere else.
+   */
+  agent_count: z.number().int().default(0),
 });
 export type Skill = z.infer<typeof Skill>;
+
+/** One immutable snapshot of a skill body. Only a body change creates a version. */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
+/** What the import parser could not determine, surfaced in the preview. */
+export const SkillWarning = z.enum([
+  'no-heading',
+  'no-description',
+  'unknown-type',
+  'truncated',
+  'code-blocks-kept-as-text',
+]);
+export type SkillWarning = z.infer<typeof SkillWarning>;
+
+/** A parsed-but-unsaved skill returned by POST /skills/parse. Never persisted as-is. */
+export const SkillDraft = z.object({
+  name: z.string(),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  warnings: z.array(SkillWarning),
+});
+export type SkillDraft = z.infer<typeof SkillDraft>;
+
+/**
+ * Body of POST /skills/parse — either a markdown file already read by the
+ * browser (`content`), or a base64 `.zip` the server unpacks itself
+ * (`archive_b64`). The zip half is server-side on purpose: unpacking is the one
+ * step that has to reject things (traversal paths, bombs, no markdown inside),
+ * and a rejection the browser performs is a rejection an attacker can skip.
+ */
+export const SkillImportRequest = z
+  .object({
+    filename: z.string().optional(),
+    content: z.string().min(1).optional(),
+    archive_b64: z.string().min(1).optional(),
+  })
+  .refine((v) => (v.content === undefined) !== (v.archive_b64 === undefined), {
+    message: 'Provide exactly one of content or archive_b64',
+  });
+export type SkillImportRequest = z.infer<typeof SkillImportRequest>;
+
+/** Body of POST /skills/:id/restore — roll the body back to an earlier snapshot. */
+export const SkillRestoreRequest = z.object({
+  version: z.number().int().min(1),
+});
+export type SkillRestoreRequest = z.infer<typeof SkillRestoreRequest>;
 
 export const CommunitySkill = z.object({
   name: z.string(),
@@ -141,15 +206,81 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
-export const ConventionCandidate = z.object({
-  id: z.string(),
-  rule: z.string(),
-  evidence_path: z.string(),
+/**
+ * A house-rule the model claims to have found in the repo, plus the reviewer's
+ * decision about it. Candidates are persisted BEFORE anyone judges them, so a
+ * scan survives a reload and a rejection is not re-proposed by the next scan.
+ */
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'error-handling',
+  'testing',
+  'typing',
+  'imports',
+  'formatting',
+  'other',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+/** `pending` until a human accepts or rejects; only `accepted` reaches the skill. */
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
+/**
+ * One candidate exactly as the model must return it: category, the rule itself,
+ * evidence as FILE + LINE, and a confidence. Evidence is mandatory — a rule with
+ * no line to point at is an opinion, and the UI has nothing to show for it.
+ */
+export const ConventionDraft = z.object({
+  category: ConventionCategory,
+  rule: z.string().min(1),
+  evidence_path: z.string().min(1),
+  evidence_line: z.number().int().min(1),
   evidence_snippet: z.string(),
   confidence: z.number().min(0).max(1),
-  accepted: z.boolean(),
+});
+export type ConventionDraft = z.infer<typeof ConventionDraft>;
+
+/** A persisted candidate: a draft plus identity and the accept/reject decision. */
+export const ConventionCandidate = ConventionDraft.extend({
+  id: z.string(),
+  repo_id: z.string(),
+  status: ConventionStatus,
+  created_at: z.string(),
 });
 export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+
+/** Result of a scan: what was persisted, and which files it actually read. */
+export const ConventionScan = z.object({
+  candidates: z.array(ConventionCandidate),
+  sampled_files: z.array(z.string()),
+  /** Model that produced the candidates; null when the scan degraded to none. */
+  model: z.string().nullable(),
+});
+export type ConventionScan = z.infer<typeof ConventionScan>;
+
+/** Editable fields of a candidate (the inline Edit on a card). */
+export const ConventionCandidatePatch = z.object({
+  rule: z.string().min(1).optional(),
+  category: ConventionCategory.optional(),
+  status: ConventionStatus.optional(),
+});
+export type ConventionCandidatePatch = z.infer<typeof ConventionCandidatePatch>;
+
+/**
+ * Body of "Create skill" on the Conventions page. Name/description/body are all
+ * editable in the modal: the assembled markdown is a PROPOSAL, and the user is
+ * the one who signs off on the text an agent will be instructed with.
+ */
+export const ConventionSkillRequest = z.object({
+  name: z.string().min(1).max(120),
+  description: z.string().min(1),
+  body: z.string().min(1),
+  /** Agent to link the resulting skill to; omitted = create it unlinked. */
+  agent_id: z.string().optional(),
+});
+export type ConventionSkillRequest = z.infer<typeof ConventionSkillRequest>;
 
 // ---- Agents ----
 export const Provider = z.enum(['openai', 'anthropic', 'openrouter']);

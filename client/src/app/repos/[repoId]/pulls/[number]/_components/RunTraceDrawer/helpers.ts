@@ -1,5 +1,6 @@
 import type { LogLine } from "@devdigest/ui";
 import type { RunTrace } from "@devdigest/shared";
+import { CHARS_PER_TOKEN } from "./constants";
 
 interface RawEvent {
   t: string;
@@ -20,6 +21,16 @@ export function traceLog(trace: RunTrace | undefined): LogLine[] {
 /** Seconds-formatted duration. */
 export function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/**
+ * Approximate token count of a single prompt segment. The trace stores prompt
+ * legs as text only, so the size of one leg (e.g. the skills block) can't be
+ * read off the run's total token stats — we re-derive it the way the server
+ * does, so both sides report the same number.
+ */
+export function approxTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
 /** Token in→out summary (e.g. "12k→1.5k"). */

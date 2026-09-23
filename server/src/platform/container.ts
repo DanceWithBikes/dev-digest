@@ -7,6 +7,7 @@ import type {
   Embedder,
   LLMProvider,
 } from '@devdigest/shared';
+import type { FeatureModelChoice, FeatureModelId } from '@devdigest/shared';
 import type { AppConfig } from './config.js';
 import type { Db } from '../db/client.js';
 import { JobRunner } from './jobs.js';
@@ -24,6 +25,8 @@ import { estimateCost } from '../adapters/llm/pricing.js';
 import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
+import { SkillsRepository } from '../modules/skills/repository.js';
+import { resolveFeatureModel } from '../modules/settings/feature-models.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
@@ -72,6 +75,7 @@ export class Container {
   // `container.agentsRepo` instead of reaching into another module's folder.
   private _agentsRepo?: AgentsRepository;
   private _reviewRepo?: ReviewRepository;
+  private _skillsRepo?: SkillsRepository;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
@@ -98,6 +102,26 @@ export class Container {
 
   get reviewRepo(): ReviewRepository {
     return (this._reviewRepo ??= new ReviewRepository(this.db));
+  }
+
+  /**
+   * The skills repository, shared because two features write skills: the skills
+   * module itself, and the conventions module when it assembles accepted
+   * candidates into one. Exposed here rather than imported across modules so the
+   * `skills` table keeps a single owner.
+   */
+  get skillsRepo(): SkillsRepository {
+    return (this._skillsRepo ??= new SkillsRepository(this.db));
+  }
+
+  /**
+   * Resolve a system LLM feature (onboarding, conventions, …) to a concrete
+   * provider+model: the workspace's Settings override, else the registry
+   * default. Lives on the container because feature-model resolution is a
+   * settings read that other modules need and may not import directly.
+   */
+  featureModel(workspaceId: string, id: FeatureModelId): Promise<FeatureModelChoice> {
+    return resolveFeatureModel(this, workspaceId, id);
   }
 
   get codeIndex(): CodeIndex {

@@ -46,4 +46,10 @@ jobs:
 
       - run: pnpm typecheck
 
+      # Architecture gate: import boundaries (client/.dependency-cruiser.cjs) - shared never
+      # imports routes, routes never import each other, folders are entered through index.ts.
+      # Rules and reasoning: .claude/skills/frontend-ui-architecture/.
+      - name: Architecture boundaries
+        run: pnpm arch:check
+
       - run: pnpm test

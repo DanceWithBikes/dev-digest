@@ -9,6 +9,8 @@ in the DB). The canonical, reviewable copies live next to this file:
 - [`general-reviewer.md`](./general-reviewer.md)
 - [`security-reviewer.md`](./security-reviewer.md)
 - [`performance-reviewer.md`](./performance-reviewer.md)
+- [`test-quality-reviewer.md`](./test-quality-reviewer.md)
+- [`api-contract-reviewer.md`](./api-contract-reviewer.md)
 
 > The DB is the source of truth at run time. These files are the human-readable
 > originals — when you change a prompt, edit the file here **and** push it to the
@@ -38,13 +40,41 @@ delimiter-wrapped (`prompt.ts:104-122`):
 ```
 <task line, e.g. "Review PR #7 '…'">
 ## PR description        (untrusted, author-controlled, truncated to 4000 chars)
-## Skills / rules        (linked skill bodies)
+## Skills / rules        (attached + enabled skill bodies, in the agent's order)
 ## Relevant memory       (curated memory items)
 ## Repo skeleton         (untrusted, repo-derived)
 ## Project context       (untrusted spec chunks)
 ## Callers of changed symbols  (untrusted, repo-derived)
 ## Diff to review        (untrusted)
 ```
+
+### `## Skills / rules` — what a skill adds (L02)
+
+The section is built from the skills attached to the agent in the editor's Skills tab:
+
+- **Which** — a skill is included when it is attached to this agent **and** globally
+  enabled on the Skills page. Switching a skill off there removes it from every
+  agent's prompt without changing any attachment.
+- **Order** — `agent_skills.order`, i.e. the order shown in the Skills tab. Earlier
+  skills appear earlier in the section.
+- **Shape** — one block per skill, `### <skill name>` followed by its markdown body,
+  blocks joined by a blank line. That is what makes each skill individually visible
+  in the Run Trace and in the run log.
+- **Trust** — skill bodies are **not** wrapped in `<untrusted>`. They are instructions
+  the agent follows, by design: a skill is configuration, not data. This is exactly
+  why importing someone else's skill means running their instructions, and why the
+  import flow shows the whole body and saves it disabled.
+
+Built here: `server/src/modules/reviews/helpers.ts` (`selectSkillBodies`), called from
+`run-executor.ts` (`buildSkillBodies`).
+
+**Where the knowledge belongs.** A reviewer's *prompt* carries the role, the severity
+scale and the output discipline. The concrete rubric — what counts as enough coverage,
+what counts as a breaking change — belongs in a **skill**, so it can be shared between
+agents, versioned, and switched off. `Test Quality Reviewer` and `API Contract Reviewer`
+are written that way: they defer to `## Skills / rules` explicitly and say in their
+summary when no rubric was configured. Do not "improve" them by inlining a checklist —
+that duplicates the skill and hides whether the skill is doing anything.
 
 Sections with no content are omitted. Everything repo- or author-derived is wrapped
 in `<untrusted source="…">…</untrusted>` so the model can tell instructions

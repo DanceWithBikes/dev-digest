@@ -1,0 +1,50 @@
+{
+  "skill_name": "frontend-ui-architecture",
+  "evals": [
+    {
+      "id": 1,
+      "name": "place-new-feature-code",
+      "prompt": "In client/ I need to add a 'Run cost breakdown' section to the PR detail page (src/app/repos/[repoId]/pulls/[number]). It shows a small table of cost per agent, has a threshold above which a row is highlighted (say $0.50), a function that groups runs by agent and sums cost, and a label map for providers. Later the same grouping function will probably also be needed on the agents page. Don't write the implementation - give me the exact file/folder plan: which files you create, where, what goes into each, and what each index.ts exports. Explain the reasoning briefly.",
+      "expected_output": "Route-private _components/<Name>/ folder under the PR detail segment with component, helpers.ts (pure grouping function), constants.ts (threshold, provider label map as const), optional test files, index.ts exporting only the component. Grouping helper stays local now and is promoted (moved) only when the agents page really needs it. Data via a hook in src/lib/hooks, no fetch in the component. Copy via messages/en namespace, not constants.",
+      "files": [],
+      "expectations": [
+        "Component lives in the PR detail route's private _components/<Name>/ folder",
+        "index.ts exports only the component, not helpers or constants",
+        "Grouping function stays local now; promotion is described as a move when the agents page really needs it",
+        "Threshold is a named constant and the provider map is a typed lookup in constants.ts",
+        "No fetch in the component; data comes from the existing query hook",
+        "User-facing copy goes to messages/en, not to constants"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "review-structure-violations",
+      "prompt": "Review this proposed change for structure only (not code style). 1) src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx imports { AgentCard } from '@/app/agents/_components/AgentCard/AgentCard'. 2) A new file src/components/index.ts re-exports every folder in src/components with export *. 3) src/lib/model-label.ts imports a constant from '@/app/agents/_components/AgentCard/constants'. 4) A new function useSortedFindings(findings) in src/lib/hooks/core.ts that only returns [...findings].sort(bySeverity). 5) FindingsTab.tsx calls apiFetch('/runs/' + id) inside a useEffect. For each item say whether it is a problem, which rule it breaks, and the concrete fix.",
+      "expected_output": "All five flagged: (1) cross-route import plus deep import past entry point -> promote AgentCard to src/components or compose higher; (2) directory-wide barrel with export * -> remove, import per-folder entry points; (3) shared importing from app, wrong direction -> move the constant down to shared domain module; (4) pure function named use* and placed among query hooks -> plain helper function; (5) fetch in component -> query hook in src/lib/hooks.",
+      "files": [],
+      "expectations": [
+        "Item 1 flagged: cross-route import and deep import; fix is promotion to src/components",
+        "Item 2 flagged: directory-wide export * barrel rejected",
+        "Item 3 flagged: shared importing from app; fix moves the constant into the shared layer",
+        "Item 4 flagged: pure function named use*; replaced by a plain helper at the right scope",
+        "Item 5 flagged: fetch in component; fix is a query hook in src/lib/hooks",
+        "Notes the repo's existing export * entry points without treating them as precedent"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "restructure-fat-page-and-component",
+      "prompt": "Two files in client/ have grown: src/app/repos/[repoId]/pulls/[number]/page.tsx (~190 lines) and src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/RunHistory.tsx (~250 lines). Read the actual code and propose how to restructure them: what to extract into sub-components, hooks and helper functions, where each new file goes, what stays, and in what order to do the refactor so nothing breaks. Do not edit any files - I want the plan.",
+      "expected_output": "Plan grounded in the real code. page.tsx becomes a thin route entry that renders one view component under _components; its logic moves into that view, hooks and helpers. RunHistory: responsibilities listed, pure logic extracted first to helpers.ts with tests, then use-case hooks, then private sub-components under RunHistory/_components; index.ts surface unchanged; tests run after each step. No splitting purely by line count, no premature shared abstractions, no fetch in components.",
+      "files": [],
+      "expectations": [
+        "page.tsx becomes a thin route entry rendering one view component under _components",
+        "No new folder convention is invented; new files follow the neighbours' anatomy",
+        "Pure logic is extracted first into helpers.ts with unit tests",
+        "RunHistory gets an index.ts entry point and the deep import in FindingsTab is fixed",
+        "RunHistory rows are split into private sub-components under RunHistory/_components",
+        "Tests and typecheck run after every step"
+      ]
+    }
+  ]
+}

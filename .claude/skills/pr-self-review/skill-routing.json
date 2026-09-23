@@ -1,0 +1,126 @@
+{
+  "$comment": "Which review skill runs on which changed files. `paths`/`exclude` are globs relative to the repo root (** any depth, * one segment, {a,b} alternatives). `contains` is an optional regex tested against the file's current content; when present, BOTH a path and the content must match. Files matching `docs` are prose: they are listed in the plan but not sent to code-review skills. `contains` rules run with the multiline flag. A gate may list `requires` (extra paths that must exist for it to run; its own `<cwd>/node_modules` is always required). A skill listed in `notForReview` is knowingly skipped. Any skill in .claude/skills that appears in neither list is reported by collect-changes.mjs as `unmappedSkills` - add it here.",
+
+  "neverReview": [
+    "**/pnpm-lock.yaml",
+    "**/package-lock.json",
+    "skills-lock.json",
+    "**/node_modules",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "**/*.{png,jpg,jpeg,gif,webp,ico,svg,woff,woff2,pdf}"
+  ],
+
+  "docs": ["**/*.md", "**/*.mdx"],
+
+  "skills": {
+    "frontend-ui-architecture": {
+      "scope": "frontend",
+      "paths": ["client/src/**", "client/.dependency-cruiser.cjs"],
+      "exclude": ["client/src/vendor/**"]
+    },
+    "react-best-practices": {
+      "scope": "frontend",
+      "paths": ["client/src/**/*.tsx", "client/src/**/use*.ts", "client/src/lib/hooks/**"],
+      "exclude": ["**/*.test.{ts,tsx}", "client/src/vendor/**"]
+    },
+    "next-best-practices": {
+      "scope": "frontend",
+      "paths": [
+        "client/src/app/**/{page,layout,loading,error,global-error,not-found,template,default,route}.{ts,tsx}",
+        "client/src/middleware.ts",
+        "client/src/i18n/**",
+        "client/next.config.*"
+      ]
+    },
+    "next-best-practices#by-content": {
+      "skill": "next-best-practices",
+      "scope": "frontend",
+      "paths": ["client/src/**/*.{ts,tsx}"],
+      "exclude": ["**/*.test.{ts,tsx}"],
+      "contains": "^\\s*['\"]use (client|server)['\"]|from\\s+['\"]next[/'\"]|from\\s+['\"]next-intl"
+    },
+    "react-testing-library": {
+      "scope": "frontend",
+      "paths": ["client/src/**/*.test.{ts,tsx}", "client/src/test/**", "client/vitest.config.*"]
+    },
+
+    "backend-onion-architecture": {
+      "scope": "backend",
+      "paths": ["server/src/**", "server/.dependency-cruiser.cjs", "server/.dependency-cruiser-known-violations.json", "reviewer-core/src/**"],
+      "exclude": ["server/src/db/migrations/**", "server/src/vendor/**"]
+    },
+    "fastify-best-practices": {
+      "scope": "backend",
+      "paths": ["server/src/**/routes.ts", "server/src/**/routes/**", "server/src/app.ts", "server/src/server.ts", "server/src/platform/**", "server/src/modules/_shared/**"],
+      "exclude": ["**/*.test.ts"]
+    },
+    "drizzle-orm-patterns": {
+      "scope": "backend",
+      "paths": ["server/src/**/repository.ts", "server/src/**/repository/**", "server/src/db/**", "server/drizzle.config.*"],
+      "exclude": ["server/src/db/migrations/**"]
+    },
+    "drizzle-orm-patterns#by-import": {
+      "skill": "drizzle-orm-patterns",
+      "scope": "backend",
+      "paths": ["server/src/**/*.ts"],
+      "exclude": ["server/src/db/migrations/**"],
+      "contains": "from\\s+['\"]drizzle-orm"
+    },
+    "postgresql-table-design": {
+      "scope": "backend",
+      "paths": ["server/src/db/schema.ts", "server/src/db/schema/**", "server/src/db/migrations/**"]
+    },
+
+    "zod": {
+      "scope": "full-stack",
+      "paths": ["{client,server,reviewer-core}/src/**/*.{ts,tsx}"],
+      "exclude": ["**/*.test.{ts,tsx}"],
+      "contains": "from\\s+['\"]zod['\"]"
+    },
+    "security": {
+      "scope": "full-stack",
+      "paths": [
+        "server/src/**/*.ts",
+        "reviewer-core/src/**/*.ts",
+        ".github/workflows/**",
+        "docker-compose.yml",
+        "scripts/**",
+        ".claude/hooks/**",
+        ".claude/settings*.json",
+        "**/.env*",
+        "**/package.json"
+      ],
+      "exclude": ["**/*.test.{ts,tsx}", "server/src/db/migrations/**"]
+    },
+    "security#client-by-content": {
+      "skill": "security",
+      "scope": "full-stack",
+      "paths": ["client/src/**/*.{ts,tsx}"],
+      "exclude": ["**/*.test.{ts,tsx}"],
+      "contains": "dangerouslySetInnerHTML|innerHTML|\\beval\\(|new Function|localStorage|sessionStorage|document\\.cookie|window\\.location|postMessage|process\\.env|\\bfetch\\(|href=\\{|target=[\"']_blank|apiKey|api_key|accessToken|authToken|Authorization|Bearer |secret|password"
+    },
+    "typescript-expert": {
+      "scope": "full-stack",
+      "paths": ["**/tsconfig*.json", "**/*.d.ts"]
+    }
+  },
+
+  "notForReview": {
+    "pr-self-review": "this skill",
+    "engineering-insights": "authoring workflow for docs/insights.md, not a review lens",
+    "mermaid-diagram": "authoring aid, not a review lens"
+  },
+
+  "packageManagers": { "client": "pnpm", "server": "pnpm", "reviewer-core": "npm", "e2e": "npm" },
+
+  "gates": [
+    { "name": "client arch:check", "cwd": "client", "command": "pnpm arch:check", "when": ["client/src/**", "client/.dependency-cruiser.cjs", "client/package.json", "client/tsconfig*.json"] },
+    { "name": "client typecheck", "cwd": "client", "command": "pnpm typecheck", "when": ["client/**/*.{ts,tsx}", "client/package.json", "client/tsconfig*.json"] },
+    { "name": "server arch:check", "cwd": "server", "command": "pnpm arch:check", "when": ["server/src/**", "server/.dependency-cruiser*", "server/package.json", "server/tsconfig*.json"] },
+    { "name": "server typecheck", "cwd": "server", "command": "pnpm typecheck", "requires": ["reviewer-core/node_modules"], "when": ["server/**/*.ts", "reviewer-core/src/**", "server/package.json", "server/tsconfig*.json"] },
+    { "name": "reviewer-core typecheck", "cwd": "reviewer-core", "command": "npm run typecheck", "when": ["reviewer-core/**/*.ts", "reviewer-core/package.json", "reviewer-core/tsconfig*.json"] },
+    { "name": "e2e typecheck", "cwd": "e2e", "command": "npm run typecheck", "when": ["e2e/**/*.ts", "e2e/package.json", "e2e/tsconfig*.json"] }
+  ]
+}

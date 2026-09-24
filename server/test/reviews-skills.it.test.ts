@@ -7,7 +7,7 @@ import { seed } from '../src/db/seed.js';
 import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { Review, RunTrace } from '@devdigest/shared';
+import type { Intent, Review, RunTrace } from '@devdigest/shared';
 
 /**
  * The load-bearing regression for skills: what an agent is actually TOLD.
@@ -38,6 +38,18 @@ const REVIEW_FIXTURE: Review = {
   findings: [],
 };
 
+// The Intent Layer (L03) now runs as shared pre-work on every review
+// (run-executor.ts#deriveIntent), against the `review_intent` feature model
+// (defaults to openrouter). Without this override the run would fall through
+// to a REAL provider (any locally configured OPENROUTER_API_KEY), making this
+// test's timing dependent on live network latency — mock it like the review
+// provider above so the run stays fast and deterministic.
+const INTENT_FIXTURE: Intent = {
+  intent: 'Apply a coupon discount to the checkout flow.',
+  in_scope: ['Coupon discount calculation'],
+  out_of_scope: [],
+};
+
 d('skills reach the prompt (Testcontainers pg)', () => {
   let pg: PgFixture;
   let workspaceId: string;
@@ -52,7 +64,10 @@ d('skills reach the prompt (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
-        llm: { openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }) },
+        llm: {
+          openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }),
+          openrouter: new MockLLMProvider('openai', { structuredBySchema: { pr_intent: INTENT_FIXTURE } }),
+        },
       },
     });
 

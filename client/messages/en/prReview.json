@@ -119,5 +119,19 @@
     "goToReview": "Jump to this run’s findings below",
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run"
+  },
+  "overview": {
+    "prBrief": "PR Brief"
+  },
+  "intent": {
+    "title": "Intent",
+    "inScope": "In scope",
+    "outOfScope": "Out of scope",
+    "outOfScopeEmpty": "Nothing explicitly excluded",
+    "sourceUnavailable": "{kind} could not be read",
+    "rerun": "Re-run",
+    "outOfDate": "Intent is out of date",
+    "empty": "No intent detected yet",
+    "detect": "Detect intent"
   }
 }

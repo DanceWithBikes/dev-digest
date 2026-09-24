@@ -56,8 +56,27 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
-/** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
-export const PrIntentRecord = Intent.extend({ pr_id: z.string() });
+/** One attempt to gather an intent source — provenance for the INTENT card. */
+export const IntentSource = z.object({
+  kind: z.string(),
+  ref: z.string().nullable(),
+  ok: z.boolean(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
+/**
+ * Intent persisted for a PR (the Intent plus the pr_id it scopes, and the
+ * provenance & missing-context tracking which sources resolved).
+ */
+export const PrIntentRecord = Intent.extend({
+  pr_id: z.string(),
+  sources: z.array(IntentSource).nullish(),
+  missing_context: z.array(z.string()).nullish(),
+  head_sha: z.string().nullish(),
+  provider: z.string().nullish(),
+  model: z.string().nullish(),
+  generated_at: z.string().nullish(),
+});
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 
 /** Smart-diff response for a PR (the SmartDiff). */

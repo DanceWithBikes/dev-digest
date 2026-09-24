@@ -64,3 +64,45 @@ describe('assemblePrompt — ## PR description', () => {
     expect((assembly.pr_description as string).length).toBe(4000);
   });
 });
+
+describe('assemblePrompt — ## PR intent (derived)', () => {
+  it('renders the section (untrusted-wrapped), ordered after PR description and before the diff', () => {
+    const { messages, assembly } = assemblePrompt({
+      system: 'sys',
+      diff: 'DIFF',
+      prDescription: 'Adds rate limiting to the public /api endpoints.',
+      intent: 'Adds rate limiting. Out of scope: refactoring the auth middleware.',
+    });
+    const user = messages[1]!.content;
+    expect(user).toContain('## PR intent (derived)');
+    expect(user).toContain('<untrusted source="intent">');
+    expect(user).toContain('Out of scope: refactoring the auth middleware.');
+    expect(user.indexOf('## PR intent')).toBeLessThan(user.indexOf('## Diff to review'));
+    expect(user.indexOf('## PR intent')).toBeGreaterThan(user.indexOf('## PR description'));
+    expect(assembly.intent).toContain('rate limiting');
+  });
+
+  it('omits the section when intent is undefined, absent, or blank (no behaviour change)', () => {
+    expect(userOf({ system: 'sys', diff: 'DIFF', intent: undefined })).not.toContain(
+      '## PR intent',
+    );
+    expect(userOf({ system: 'sys', diff: 'DIFF' })).not.toContain('## PR intent');
+    expect(assemblePrompt({ system: 'sys', diff: 'DIFF' }).assembly.intent ?? null).toBeNull();
+    expect(userOf({ system: 'sys', diff: 'DIFF', intent: '   ' })).not.toContain('## PR intent');
+  });
+
+  it('appends the scope instruction to the system message only when intent is present', () => {
+    const withIntent = systemOf({ system: 'sys', diff: 'DIFF', intent: 'Adds rate limiting.' });
+    expect(withIntent).toMatch(/out_of_scope/);
+    expect(withIntent).toMatch(/tag, not a waiver|not a waiver/i);
+    expect(withIntent).toMatch(/must STILL be reported/i);
+
+    const noIntent = systemOf({ system: 'sys', diff: 'DIFF' });
+    expect(noIntent).not.toMatch(/out_of_scope/);
+
+    const blankIntent = systemOf({ system: 'sys', diff: 'DIFF', intent: '   ' });
+    expect(blankIntent).not.toMatch(/out_of_scope/);
+    // A review with no intent is byte-identical to one predating this slot.
+    expect(blankIntent).toBe(noIntent);
+  });
+});

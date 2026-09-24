@@ -1,0 +1,1 @@
+ALTER TABLE "pr_intent" DROP COLUMN "confidence";

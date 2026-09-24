@@ -14,6 +14,8 @@ import { ReviewService } from './service.js';
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
+ *   GET    /pulls/:id/intent                            → PrIntentRecord | null (L03)
+ *   POST   /pulls/:id/intent                            → re-classify + upsert PR intent (L03)
  */
 const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
 export default async function reviewsRoutes(appBase: FastifyInstance) {
@@ -124,6 +126,27 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     if (!trace) throw new NotFoundError('Run trace not found');
     return trace;
   });
+
+  // ---- Intent (L03) --------------------------------------------------------
+  // Workspace-scoped via `service.getIntent`/`detectIntent`, which resolve the
+  // PR through `getPull(workspaceId, prId)` first — `pr_intent` carries no
+  // workspace_id of its own (reviews/docs/insights.md records this exact hole
+  // for the unscoped `/runs/:id/*` routes; do not repeat it here).
+  app.get('/pulls/:id/intent', { schema: { params: IdParams } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    return service.getIntent(workspaceId, req.params.id);
+  });
+
+  // Tight per-route limit, same as POST /pulls/:id/review: each call is an
+  // LLM classifier run.
+  app.post(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams }, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.detectIntent(workspaceId, req.params.id);
+    },
+  );
 
   // ---- Reads --------------------------------------------------------------
   app.get('/pulls/:id/reviews', { schema: { params: IdParams } }, async (req) => {

@@ -7,6 +7,18 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## What Doesn't Work
 
+- **2026-09-24 · `grep` on `docs/design/DevDigest Design (standalone).html` always returns 0 — the design is gzip+base64, not HTML** — Tried: `grep -ci "intent"` (and a full-file Python scan) on the 1.8MB design file to find the INTENT card markup; got 0 hits and concluded the design contains no intent screen. Failed because: the file is a **self-unpacking bundle** — 44 modules live gzip-compressed and base64-encoded inside a single `<script type="__bundler/manifest">` line, so NO source string is greppable in the raw file. The conclusion was wrong in the most expensive way: the markup is there, and a whole component was built without checking it against the original. Instead, decompress in memory first:
+  ```python
+  import json,base64,gzip,re
+  src=open('DevDigest Design (standalone).html',encoding='utf-8').read()
+  man=json.loads(re.search(r'<script type="__bundler/manifest">(.*?)</script>',src,re.S).group(1))
+  for k,v in man.items():
+      raw=gzip.decompress(base64.b64decode(v['data'])).decode('utf-8')   # then search `raw`
+  ```
+  Module ids are content hashes; iterate and match on a symbol (`IntentBlock`, `BriefCard`, `RiskPillRow`) rather than guessing an id. The modules are React `createElement` with **inline style objects** and the same `var(--…)` tokens the repo uses, so they map 1:1 onto a `styles.ts`. Screens are one module each (`screen_pr_detail`, `screen_settings`, …); fixtures (`INTENT`, `RISKS`, `BLAST`, `FINDINGS`) live together in `data.jsx`.
+  Where: `docs/design/DevDigest Design (standalone).html:170` (the `__bundler/manifest` script), `src/app/repos/[repoId]/pulls/[number]/_components/IntentCard/styles.ts:3` (the component built from it)
+  **Update (2026-09-24): this trap caught TWO independent agents in the same session (×2), which is why it is worth a whole entry.** Both grepped the raw file, both got 0 hits, and both concluded — in a written report — that the design contains no intent screen. One of them was a verification agent, so the false claim survived into a review. The failure mode is nasty precisely because the tool returns a clean, confident `0` rather than an error: nothing signals "you searched a compressed blob". **Treat a 0-hit grep on any file in `docs/design/` as meaningless, not as evidence of absence**, and decompress before concluding anything about what the design does or does not contain.
+
 - **2026-09-21 · "Components never call fetch" cannot be a dependency-cruiser rule** — Tried: forbidding `src/(app|components)/**` → `src/lib/api.ts` (non-type imports) in `.dependency-cruiser.cjs`. Failed because: it produced 5 violations and all 5 were false positives — `api.ts` exports the transport (`apiFetch`, `api`) AND the `ApiError` class, which views import at runtime for `instanceof` (e.g. `pulls/page.tsx`, `AddRepoView.tsx`); dependency-cruiser sees module edges, not named imports, so it cannot tell `ApiError` from `apiFetch`. Instead: the rule stays a review item (it is in `AGENTS.md`). If it ever needs a machine check, first move `ApiError` into its own module (e.g. `src/lib/api-error.ts`) so the transport module has no legitimate view-side importer — then the rule is one line.
   Where: `.dependency-cruiser.cjs:105` (the "Not checked here" note), `src/lib/api.ts:8` (`ApiError`)
 
@@ -18,6 +30,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Codebase Patterns
 
+- **2026-09-24 · A required Zod array in `Intent` does not mean "always non-empty" — `out_of_scope` is designed to come back `[]`** — `Intent.out_of_scope: z.array(z.string())` (`../../../src/vendor/shared/contracts/brief.ts:12`) is required/non-nullable, which reads like "always has content", but the classifier's own system prompt says the opposite: `"An empty list is a valid answer; do not invent exclusions the sources never mention"` (`server/src/modules/reviews/intent-prompt.ts:46`, mirrored server-side). A real PR with an empty description and an unreadable body legitimately produces `out_of_scope: []`. `IntentCard.tsx` originally did `intent.out_of_scope.map(...)` unconditionally, rendering the "OUT OF SCOPE" header over a blank `<ul>` with zero indication that nothing was found. Fixed by branching on `.length > 0` and rendering `t("intent.outOfScopeEmpty")` otherwise. Before assuming any LLM-classified array field is always populated, check the prompt's own instructions, not just the Zod schema's optionality.
+  Where: `IntentCard.tsx:126` (the `.length > 0` branch), `server/src/modules/reviews/intent-prompt.ts:45-46` (the "empty list is valid" instruction), `../../../src/vendor/shared/contracts/brief.ts:12` (`Intent.out_of_scope`)
+
 - **2026-09-18 · Portal content still bubbles events into the React parent** — React re-dispatches synthetic events from a portal through the REACT tree, not the DOM tree. A popover portaled to `<body>` from inside a PR row therefore triggers that row's `onClick` (navigate to the PR) unless it calls `stopPropagation` on `onClick` AND `onMouseDown`. The upside of the same rule: the row's `onMouseLeave` does NOT fire while the pointer sits in the portaled panel, which is exactly the hover behaviour you want.
   Where: `src/components/findings-summary/FindingsPopover.tsx:159` (`onClick` stopPropagation) / `:160` (`onMouseDown`), `src/app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:26` (row `onClick` → navigate), `PRRow.tsx:25` (row `onMouseLeave`)
 
@@ -26,6 +41,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   **Correction (2026-09-19):** the real clamp is `Math.min(focusIdx, Math.max(shown.length - 1, 0))` — the inner `Math.max` keeps `focus` at 0 instead of -1 when the filter leaves nothing to show.
 
 ## Tool & Library Notes
+
+- **2026-09-24 · `pnpm arch:check` cruises the client's test files too — a new `*.test.tsx` is subject to all 9 zero-tolerance rules** — `arch:check` is `depcruise src`, and the config's only exclusion is `exclude: { path: '^(\\.next|node_modules)/' }` — there is no `*.test.*` carve-out, unlike the server's dependency-cruiser config which has none either but whose tests live outside `src/`. Because `client/vitest.config.ts` includes `src/**/*.test.{ts,tsx}`, every client test sits inside the cruised tree. Consequence: a test that reaches across routes to borrow a fixture, or deep-imports a component instead of going through its `index.ts`, fails `arch:check` even though it passes `pnpm test` — and the client has **no baseline file**, so there is nothing to absorb it. Run `pnpm arch:check` after adding a client test file, not just `pnpm test`.
+  Where: `package.json:10` (`arch:check` — `depcruise src`), `.dependency-cruiser.cjs:125` (`exclude` — `.next|node_modules` only), `vitest.config.ts:18` (`include` — `src/**/*.test.{ts,tsx}`)
 
 - **2026-09-21 · `Intl.DateTimeFormat` with `month: "short"` is not test-stable — Node renders September as `Sept`** — An assertion expecting `Sep` failed under en-GB CLDR, which abbreviates September with four letters while every other month gets three. Do not "fix" it by pinning a locale in the component; formatted dates in list UIs here use `toISOString().slice(0, 16)` instead — deterministic, timezone-proof and sortable, which is what a version list needs anyway.
   Where: `src/app/skills/[id]/_components/SkillDetail/_components/SkillVersionsTab/helpers.ts` (the date formatter)

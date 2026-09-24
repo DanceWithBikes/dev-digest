@@ -52,6 +52,20 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Provenance: [{kind, ref, ok}], which sources resolved. */
+  sources: jsonb('sources').$type<{ kind: string; ref: string | null; ok: boolean }[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  /** Sources referenced but unresolved — the honesty field. */
+  missingContext: jsonb('missing_context').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  /** The PR head SHA this intent was derived from; staleness → "re-run". */
+  headSha: text('head_sha'),
+  provider: text('provider'),
+  model: text('model'),
+  tokensIn: integer('tokens_in'),
+  tokensOut: integer('tokens_out'),
+  costUsd: doublePrecision('cost_usd'),
+  generatedAt: timestamp('generated_at', { withTimezone: true }),
 });
 
 export const prBrief = pgTable('pr_brief', {

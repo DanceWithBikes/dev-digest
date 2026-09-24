@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { PrIntentRecord, Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
@@ -8,6 +8,15 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { CHARS_PER_TOKEN, REVIEW_STRATEGY } from './constants.js';
 import { selectSkillBodies, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { deriveMissingContext } from './intent-helpers.js';
+import { renderCommitsDigest, renderFilesDigest, renderIntentForPrompt } from './intent-sources.js';
+import type {
+  ClassifyResult,
+  GatheredIntentSources,
+  IntentClassifier,
+  IntentSourceCollector,
+  PrForIntent,
+} from './ports.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -45,6 +54,11 @@ export class ReviewRunExecutor {
     private container: Container,
     private repo: ReviewRepository,
     private agents: Container['agentsRepo'],
+    // Intent Layer (L03) — the collector + classifier pair, injected by
+    // `service.ts` (`makeIntentEngine`) so the LLM call stays out of this
+    // application-ring class: the executor only calls the ports, never
+    // `container.llm()`/`container.featureModel()` directly.
+    private intent: { collector: IntentSourceCollector; classifier: IntentClassifier },
   ) {}
 
   /**
@@ -104,6 +118,12 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Intent Layer (L03) — derive once, share across every queued agent (like
+    // the diff above). Best-effort: NEVER call failAll over this, unlike the
+    // diff load. A classifier failure just means the review runs without the
+    // `## PR intent (derived)` slot.
+    const intentText = await this.deriveIntent(workspaceId, pull, repo, diff, runLog);
+
     for (const { agent, runId } of jobs) {
       const agentStart = Date.now();
       logger?.info(
@@ -111,7 +131,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intentText);
         logger?.info(
           {
             runId,
@@ -143,6 +163,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    intentText: string | undefined,
   ): Promise<RunOutcome> {
     const start = Date.now();
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
@@ -214,6 +235,11 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // L03 — the derived intent (rendered from the stored `PrIntentRecord`
+        // by `renderIntentForPrompt`), same omit-when-empty contract: no
+        // intent (never derived, or derivation failed) → prompt identical to
+        // pre-L03. Wrapped in `<untrusted source="intent">` by reviewer-core.
+        ...(intentText ? { intent: intentText } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -324,6 +350,133 @@ export class ReviewRunExecutor {
       this.container.runBus.complete(runId);
       throw err;
     }
+  }
+
+  /**
+   * Intent Layer (L03) — derive PR intent ONCE, shared across every queued
+   * agent (plan §2, same shared-pre-work shape as the diff load above). Reads
+   * the stored `pr_intent` row first; re-classifies only when it's missing or
+   * STALE (`head_sha` differs from `pull.headSha` — e.g. a force-push since
+   * the last derivation). Otherwise the stored record is reused as-is.
+   *
+   * Best-effort, exactly like `buildRepoMapDigest` below — UNLIKE the diff
+   * load above, a classifier failure must never call `failAll` (plan §2/§6):
+   * it only means every queued agent reviews without the `## PR intent
+   * (derived)` slot. The classifier itself is injected (`this.intent`), so
+   * this class never calls `container.llm()`/`container.featureModel()`
+   * directly — that would put the LLM call back in the application ring.
+   */
+  private async deriveIntent(
+    workspaceId: string,
+    pull: PullRow,
+    repo: typeof schema.repos.$inferSelect,
+    diff: UnifiedDiff,
+    runLog: RunLogger,
+  ): Promise<string | undefined> {
+    try {
+      const stored = await this.repo.getIntent(pull.id);
+      if (stored && stored.head_sha === pull.headSha) {
+        runLog.info(
+          `intent: reusing stored intent — unchanged since head ${
+            stored.head_sha?.slice(0, 7) ?? stored.head_sha
+          }`,
+        );
+        return renderIntentForPrompt(stored);
+      }
+
+      const { record, sources, result } = await runLog.step(
+        'Deriving PR intent',
+        () => this.classifyAndPersistIntent(workspaceId, pull, repo, diff),
+        { kind: 'tool' },
+      );
+
+      // Structured observability: provider/model, which source KINDS resolved
+      // (booleans only — never the content), a per-part char count → rough token
+      // estimate for the Live Log, and the classifier's REAL tokens/cost.
+      const resolved = Object.fromEntries(sources.attempts.map((a) => [a.kind, a.ok]));
+      const charCounts = {
+        title: sources.pr.title.length,
+        body: sources.pr.body?.length ?? 0,
+        issue: sources.issue ? sources.issue.title.length + (sources.issue.body?.length ?? 0) : 0,
+        spec: sources.spec?.text.length ?? 0,
+        files: renderFilesDigest(sources.files).length,
+        commits: renderCommitsDigest(sources.commitMessages).length,
+      };
+      const approxTokensIn = Math.ceil(
+        Object.values(charCounts).reduce((a, b) => a + b, 0) / CHARS_PER_TOKEN,
+      );
+      runLog.info(
+        `intent: ${result.provider}/${result.model} ` +
+          `(~${approxTokensIn} tokens in est. / ${result.tokensIn} actual, ${result.tokensOut} out` +
+          `${result.costUsd != null ? `, $${result.costUsd.toFixed(4)}` : ''})`,
+        {
+          provider: result.provider,
+          model: result.model,
+          sourcesResolved: resolved,
+          charCounts,
+          approxTokensIn,
+          tokensIn: result.tokensIn,
+          tokensOut: result.tokensOut,
+          costUsd: result.costUsd,
+        },
+      );
+
+      return renderIntentForPrompt(record);
+    } catch (err) {
+      // Best-effort — see the doc comment above. NEVER failAll over this.
+      runLog.info(`intent: derivation failed — ${(err as Error).message}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Collect sources → classify → derive missing context → upsert.
+   * Mirrors `service.ts#detectIntent` (the manual re-run path); the two are
+   * not unified into one shared function because the run path additionally
+   * needs `sources`/`result` back for the structured log line above.
+   */
+  private async classifyAndPersistIntent(
+    workspaceId: string,
+    pull: PullRow,
+    repo: typeof schema.repos.$inferSelect,
+    diff: UnifiedDiff,
+  ): Promise<{ record: PrIntentRecord; sources: GatheredIntentSources; result: ClassifyResult }> {
+    const pr: PrForIntent = { id: pull.id, number: pull.number, title: pull.title, body: pull.body };
+    const repoRef = { owner: repo.owner, name: repo.name };
+
+    // `diff.files` is structurally an `IntentDiffFile[]` (a superset — the
+    // collector never reads `diff.raw`), so no conversion is needed.
+    const sources = await this.intent.collector.collect(pr, repoRef, { files: diff.files });
+    const result = await this.intent.classifier.classify(workspaceId, sources);
+
+    const record: PrIntentRecord = {
+      pr_id: pull.id,
+      intent: result.intent.intent,
+      in_scope: result.intent.in_scope,
+      out_of_scope: result.intent.out_of_scope,
+      sources: sources.attempts,
+      missing_context: deriveMissingContext(sources.attempts),
+      head_sha: pull.headSha,
+      provider: result.provider,
+      model: result.model,
+      generated_at: new Date().toISOString(),
+    };
+    await this.repo.upsertIntent(pull.id, {
+      intent: record.intent,
+      in_scope: record.in_scope,
+      out_of_scope: record.out_of_scope,
+      sources: record.sources,
+      missing_context: record.missing_context,
+      head_sha: record.head_sha,
+      provider: record.provider,
+      model: record.model,
+      generated_at: record.generated_at,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      costUsd: result.costUsd,
+    });
+
+    return { record, sources, result };
   }
 
   /**

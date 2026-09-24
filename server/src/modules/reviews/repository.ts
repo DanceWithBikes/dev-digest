@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
+import type { Finding, PrIntentRecord, RunSummary, RunTrace } from '@devdigest/shared';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -15,6 +15,9 @@ import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
 
 import type { FindingRow, PullRow } from '../../db/rows.js';
 export type { FindingRow, PullRow };
+
+import type { PrCommit, UpsertIntentValues } from './repository/pull.repo.js';
+export type { PrCommit, UpsertIntentValues };
 
 export type ReviewRow = typeof t.reviews.$inferSelect;
 
@@ -127,12 +130,17 @@ export class ReviewRepository {
 
   // ---- intent -------------------------------------------------------------
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
-    return pullRepo.upsertIntent(this.db, prId, intent);
+  upsertIntent(prId: string, values: UpsertIntentValues): Promise<void> {
+    return pullRepo.upsertIntent(this.db, prId, values);
   }
 
-  getIntent(prId: string): Promise<Intent | undefined> {
+  getIntent(prId: string): Promise<PrIntentRecord | undefined> {
     return pullRepo.getIntent(this.db, prId);
+  }
+
+  /** A PR's commits, oldest first — a deterministic intent source. */
+  commitsForPull(prId: string): Promise<PrCommit[]> {
+    return pullRepo.commitsForPull(this.db, prId);
   }
 
   // ---- observability: agent_runs + run_traces ----------------------------

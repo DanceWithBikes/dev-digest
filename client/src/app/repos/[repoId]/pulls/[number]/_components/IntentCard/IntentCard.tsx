@@ -52,9 +52,33 @@ export function IntentCard({
     );
   }
 
-  // Stale intent (force-push moved the head past what was classified) — the
-  // "out of date" affordance next to the re-run button.
-  const outOfDate = !!intent.head_sha && !!headSha && intent.head_sha !== headSha;
+  // Stale intent — the "out of date" affordance next to the re-run button.
+  // The server derives this (head sha moved OR the PR description changed since
+  // classification; a description edit moves no commit, so the sha comparison
+  // below cannot see it). The local comparison stays as the fallback for a
+  // server that predates the `stale` field.
+  const outOfDate = intent.stale ?? (!!intent.head_sha && !!headSha && intent.head_sha !== headSha);
+
+  // `missing_context[]` is the server's human-readable rendering of exactly the
+  // sources that failed, one entry per `ok: false` attempt — so rendering both
+  // lists stated every gap twice ("body could not be read" above "PR
+  // description is empty"). Prefer the readable one; the generic per-source
+  // line is only a fallback for a record stored before missing_context existed.
+  const failedSources = (intent.sources ?? []).filter((source) => !source.ok);
+  const missingContext = intent.missing_context ?? [];
+  // A spec attempt with no ref means the PR referenced no spec or plan at all.
+  // That is an absence, not a failure to read something — it gets its own muted
+  // line and is kept out of the amber warnings, which most PRs would otherwise
+  // carry just for not linking a spec.
+  const noSpecLinked = failedSources.some(
+    (source) => source.kind === "spec" && source.ref === null,
+  );
+  const warnings =
+    missingContext.length > 0
+      ? missingContext
+      : failedSources
+          .filter((source) => !(source.kind === "spec" && source.ref === null))
+          .map((source) => t("intent.sourceUnavailable", { kind: source.kind }));
 
   return (
     <Card>
@@ -109,26 +133,22 @@ export function IntentCard({
         </div>
       </div>
 
-      {(() => {
-        const failedSources = (intent.sources ?? []).filter((s) => !s.ok);
-        const missingContext = intent.missing_context ?? [];
-        if (failedSources.length === 0 && missingContext.length === 0) return null;
+      {warnings.length > 0 && (
+        <div style={s.warningsWrap}>
+          {warnings.map((msg, i) => (
+            <div key={`warning-${i}`} style={s.warnLine}>
+              {msg}
+            </div>
+          ))}
+        </div>
+      )}
 
-        return (
-          <div style={s.warningsWrap}>
-            {failedSources.map((source, i) => (
-              <div key={`source-${i}`} style={s.warnLine}>
-                {t("intent.sourceUnavailable", { kind: source.kind })}
-              </div>
-            ))}
-            {missingContext.map((msg, i) => (
-              <div key={`context-${i}`} style={s.warnLine}>
-                {msg}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
+      {noSpecLinked && (
+        <div style={s.noteRow}>
+          <Icon.FileText size={13} />
+          <span>{t("intent.noSpecLinked")}</span>
+        </div>
+      )}
     </Card>
   );
 }

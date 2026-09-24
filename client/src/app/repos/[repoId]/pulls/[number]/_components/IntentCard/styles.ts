@@ -92,4 +92,20 @@ export const s = {
     color: "var(--warn)",
     lineHeight: 1.4,
   } satisfies CSSProperties,
+  /** An absence worth stating, not a failure: its own centred footer row under
+      a hairline, icon + label — readable at a glance, but never the warn
+      colour, because nothing went wrong. */
+  noteRow: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTop: "1px solid var(--border)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    fontSize: 12.5,
+    fontWeight: 500,
+    color: "var(--text-secondary)",
+    lineHeight: 1.4,
+  } satisfies CSSProperties,
 } as const;

@@ -69,7 +69,7 @@ describe("IntentCard", () => {
     expect(screen.getByText("Detect intent")).toBeInTheDocument();
   });
 
-  it("renders failed source warnings and missing context when present", () => {
+  it("states each gap once — the readable missing-context line, not the raw source too", () => {
     mockIntent = {
       pr_id: "pr1",
       intent: "Fix auth flow",
@@ -79,11 +79,95 @@ describe("IntentCard", () => {
         { kind: "title", ref: null, ok: true },
         { kind: "spec", ref: "docs/specs/auth.md", ok: false },
       ],
-      missing_context: ["PR description is empty"],
+      missing_context: ['Linked spec "docs/specs/auth.md" could not be read'],
+      head_sha: "abc123",
+    };
+    renderWithIntl(<IntentCard prId="pr1" headSha="abc123" />);
+    expect(screen.getByText('Linked spec "docs/specs/auth.md" could not be read')).toBeInTheDocument();
+    // The generic per-source line said the same thing a second line above it.
+    expect(screen.queryByText(/^spec could not be read$/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the per-source line for a record stored without missing_context", () => {
+    mockIntent = {
+      pr_id: "pr1",
+      intent: "Fix auth flow",
+      in_scope: ["Login page"],
+      out_of_scope: [],
+      sources: [
+        { kind: "title", ref: null, ok: true },
+        { kind: "spec", ref: "docs/specs/auth.md", ok: false },
+      ],
+      missing_context: [],
       head_sha: "abc123",
     };
     renderWithIntl(<IntentCard prId="pr1" headSha="abc123" />);
     expect(screen.getByText(/spec could not be read/)).toBeInTheDocument();
-    expect(screen.getByText("PR description is empty")).toBeInTheDocument();
+  });
+
+  it("states that no spec or plan is linked, without dressing it as a failure", () => {
+    mockIntent = {
+      pr_id: "pr1",
+      intent: "Fix auth flow",
+      in_scope: ["Login page"],
+      out_of_scope: [],
+      // A spec attempt with no ref = the PR referenced none.
+      sources: [
+        { kind: "title", ref: null, ok: true },
+        { kind: "spec", ref: null, ok: false },
+      ],
+      missing_context: [],
+      head_sha: "abc123",
+    };
+    renderWithIntl(<IntentCard prId="pr1" headSha="abc123" />);
+    expect(screen.getByText(messages.intent.noSpecLinked)).toBeInTheDocument();
+    // Not the generic failure line — nothing failed to be read.
+    expect(screen.queryByText(/could not be read/)).not.toBeInTheDocument();
+  });
+
+  it("does not claim a spec is missing when one resolved", () => {
+    mockIntent = {
+      pr_id: "pr1",
+      intent: "Fix auth flow",
+      in_scope: ["Login page"],
+      out_of_scope: [],
+      sources: [{ kind: "spec", ref: "docs/specs/auth.md", ok: true }],
+      missing_context: [],
+      head_sha: "abc123",
+    };
+    renderWithIntl(<IntentCard prId="pr1" headSha="abc123" />);
+    expect(screen.queryByText(messages.intent.noSpecLinked)).not.toBeInTheDocument();
+  });
+
+  it("flags the intent out of date when the server says so, even though the head sha matches", () => {
+    // The case `head_sha` alone cannot see: the author edited the PR
+    // description, which moves no commit, so the card must still offer a re-run.
+    mockIntent = {
+      pr_id: "pr1",
+      intent: "Fix auth flow",
+      in_scope: ["Login page"],
+      out_of_scope: [],
+      sources: [{ kind: "body", ref: null, ok: false }],
+      missing_context: ["PR description is empty"],
+      head_sha: "abc123",
+      stale: true,
+    };
+    renderWithIntl(<IntentCard prId="pr1" headSha="abc123" />);
+    expect(screen.getByText(messages.intent.outOfDate)).toBeInTheDocument();
+  });
+
+  it("does not flag a fresh intent as out of date", () => {
+    mockIntent = {
+      pr_id: "pr1",
+      intent: "Fix auth flow",
+      in_scope: ["Login page"],
+      out_of_scope: [],
+      sources: [{ kind: "body", ref: null, ok: true }],
+      missing_context: [],
+      head_sha: "abc123",
+      stale: false,
+    };
+    renderWithIntl(<IntentCard prId="pr1" headSha="abc123" />);
+    expect(screen.queryByText(messages.intent.outOfDate)).not.toBeInTheDocument();
   });
 });

@@ -21,6 +21,13 @@ export interface PrForIntent {
   number: number;
   title: string;
   body: string | null;
+  /**
+   * The PR's head commit. Needed because a linked spec is read at the PR's own
+   * head, not off the clone's working tree — the clone only ever tracks the
+   * default branch, so a spec the PR itself adds is not on disk yet
+   * (`compose.ts#readSpecAtHead`).
+   */
+  headSha: string;
 }
 
 /**

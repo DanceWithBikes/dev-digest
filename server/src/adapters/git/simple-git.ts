@@ -129,6 +129,17 @@ export class SimpleGitClient implements GitClient {
   async readFile(repo: RepoRef, path: string): Promise<string> {
     return readFile(join(this.clonePathFor(repo), path), 'utf8');
   }
+
+  /**
+   * `git show <ref>:<path>` — the blob as of `ref`, read straight out of the
+   * object store. Deliberately NOT a checkout: the clone is a shared read-only
+   * mirror and moving its worktree would corrupt any concurrent read (`sync`
+   * already owns HEAD). Throws when `ref` is not in the clone or the path does
+   * not exist there, which is how callers detect "fetch the PR head first".
+   */
+  async readFileAt(repo: RepoRef, ref: string, path: string): Promise<string> {
+    return this.git(repo).raw(['show', `${ref}:${path}`]);
+  }
 }
 
 function parseBlamePorcelain(raw: string): BlameLine[] {

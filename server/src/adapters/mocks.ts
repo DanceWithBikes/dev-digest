@@ -254,6 +254,7 @@ export interface MockGitOptions {
 export class MockGitClient implements GitClient {
   public cloned: { repo: RepoRef; url: string }[] = [];
   public syncs: { repo: RepoRef; branch: string }[] = [];
+  public pullHeadFetches: { repo: RepoRef; n: number }[] = [];
   private syncedHead?: string;
 
   constructor(private opts: MockGitOptions = {}) {}
@@ -265,7 +266,9 @@ export class MockGitClient implements GitClient {
     this.cloned.push({ repo, url });
     return { path: this.clonePathFor(repo) };
   }
-  async fetchPullHead(): Promise<void> {}
+  async fetchPullHead(repo: RepoRef, n: number): Promise<void> {
+    this.pullHeadFetches.push({ repo, n });
+  }
   async sync(repo: RepoRef, branch: string): Promise<{ head: string }> {
     this.syncs.push({ repo, branch });
     // After a sync, HEAD advances to syncedHead (or stays at head if unset).
@@ -292,6 +295,15 @@ export class MockGitClient implements GitClient {
   }
   async readFile(_repo: RepoRef, path: string): Promise<string> {
     return this.opts.files?.[path] ?? '';
+  }
+  /**
+   * Same fixture map as `readFile`, whatever the ref — the mock has no object
+   * store to speak of. Delegating (rather than re-reading `opts.files`) keeps a
+   * subclass that overrides `readFile` to simulate an unreadable path in control
+   * of BOTH reads; see `intent.it.test.ts#GitWithUnreachableSpec`.
+   */
+  async readFileAt(repo: RepoRef, _ref: string, path: string): Promise<string> {
+    return this.readFile(repo, path);
   }
 }
 

@@ -9,7 +9,7 @@ import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { makeIntentEngine } from './compose.js';
-import { deriveMissingContext } from './intent-helpers.js';
+import { bodyFingerprint, deriveMissingContext, isIntentStale } from './intent-helpers.js';
 import type { IntentClassifier, IntentSourceCollector, PrForIntent } from './ports.js';
 
 // Re-export DTO types + converters for backward-compatible imports from
@@ -198,7 +198,12 @@ export class ReviewService {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
     const record = await this.repo.getIntent(prId);
-    return record ?? null;
+    if (!record) return null;
+    // `stale` is derived here, not stored: the record goes out of date because
+    // the PULL changed (a push, or a description edit that reaches
+    // `pull_requests.body` only on the next detail sync), never because
+    // anything touched `pr_intent`.
+    return { ...record, stale: isIntentStale(record, pull) };
   }
 
   /**
@@ -213,7 +218,13 @@ export class ReviewService {
     if (!repoRow) throw new NotFoundError('Repo not found');
 
     const diff = await loadDiff(this.container, this.repo, workspaceId, pull, repoRow);
-    const pr: PrForIntent = { id: pull.id, number: pull.number, title: pull.title, body: pull.body };
+    const pr: PrForIntent = {
+      id: pull.id,
+      number: pull.number,
+      title: pull.title,
+      body: pull.body,
+      headSha: pull.headSha,
+    };
     const repoRef = { owner: repoRow.owner, name: repoRow.name };
 
     // `diff.files` is structurally an `IntentDiffFile[]` (a superset — the
@@ -229,6 +240,8 @@ export class ReviewService {
       sources: sources.attempts,
       missing_context: deriveMissingContext(sources.attempts),
       head_sha: pull.headSha,
+      body_sha: bodyFingerprint(pull.body),
+      stale: false,
       provider: result.provider,
       model: result.model,
       generated_at: new Date().toISOString(),
@@ -240,6 +253,7 @@ export class ReviewService {
       sources: record.sources,
       missing_context: record.missing_context,
       head_sha: record.head_sha,
+      body_sha: record.body_sha,
       provider: record.provider,
       model: record.model,
       generated_at: record.generated_at,

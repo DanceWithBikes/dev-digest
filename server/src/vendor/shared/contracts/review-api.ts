@@ -73,9 +73,24 @@ export const PrIntentRecord = Intent.extend({
   sources: z.array(IntentSource).nullish(),
   missing_context: z.array(z.string()).nullish(),
   head_sha: z.string().nullish(),
+  /**
+   * Fingerprint of the PR description this intent was derived from. Provenance
+   * only — `stale` is what the UI reads; null on records written before the
+   * column existed.
+   */
+  body_sha: z.string().nullish(),
   provider: z.string().nullish(),
   model: z.string().nullish(),
   generated_at: z.string().nullish(),
+  /**
+   * Derived server-side on read, never stored: the PR moved on since this
+   * intent was classified, so its scope bullets and — above all — its
+   * `missing_context[]` may no longer describe the PR. True when the head sha
+   * moved OR the description changed (a description edit moves no commit, so
+   * `head_sha` alone misses it entirely). Always false on the record the
+   * classifier just produced.
+   */
+  stale: z.boolean().nullish(),
 });
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 

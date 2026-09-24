@@ -8,7 +8,7 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { CHARS_PER_TOKEN, REVIEW_STRATEGY } from './constants.js';
 import { selectSkillBodies, taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
-import { deriveMissingContext } from './intent-helpers.js';
+import { bodyFingerprint, deriveMissingContext, isIntentStale } from './intent-helpers.js';
 import { renderCommitsDigest, renderFilesDigest, renderIntentForPrompt } from './intent-sources.js';
 import type {
   ClassifyResult,
@@ -356,8 +356,9 @@ export class ReviewRunExecutor {
    * Intent Layer (L03) — derive PR intent ONCE, shared across every queued
    * agent (plan §2, same shared-pre-work shape as the diff load above). Reads
    * the stored `pr_intent` row first; re-classifies only when it's missing or
-   * STALE (`head_sha` differs from `pull.headSha` — e.g. a force-push since
-   * the last derivation). Otherwise the stored record is reused as-is.
+   * STALE (`isIntentStale` — the head moved, e.g. a force-push, OR the PR
+   * description changed, which moves no commit at all and so is invisible to a
+   * `head_sha` comparison). Otherwise the stored record is reused as-is.
    *
    * Best-effort, exactly like `buildRepoMapDigest` below — UNLIKE the diff
    * load above, a classifier failure must never call `failAll` (plan §2/§6):
@@ -375,7 +376,7 @@ export class ReviewRunExecutor {
   ): Promise<string | undefined> {
     try {
       const stored = await this.repo.getIntent(pull.id);
-      if (stored && stored.head_sha === pull.headSha) {
+      if (stored && !isIntentStale(stored, pull)) {
         runLog.info(
           `intent: reusing stored intent — unchanged since head ${
             stored.head_sha?.slice(0, 7) ?? stored.head_sha
@@ -441,7 +442,13 @@ export class ReviewRunExecutor {
     repo: typeof schema.repos.$inferSelect,
     diff: UnifiedDiff,
   ): Promise<{ record: PrIntentRecord; sources: GatheredIntentSources; result: ClassifyResult }> {
-    const pr: PrForIntent = { id: pull.id, number: pull.number, title: pull.title, body: pull.body };
+    const pr: PrForIntent = {
+      id: pull.id,
+      number: pull.number,
+      title: pull.title,
+      body: pull.body,
+      headSha: pull.headSha,
+    };
     const repoRef = { owner: repo.owner, name: repo.name };
 
     // `diff.files` is structurally an `IntentDiffFile[]` (a superset — the
@@ -457,6 +464,8 @@ export class ReviewRunExecutor {
       sources: sources.attempts,
       missing_context: deriveMissingContext(sources.attempts),
       head_sha: pull.headSha,
+      body_sha: bodyFingerprint(pull.body),
+      stale: false,
       provider: result.provider,
       model: result.model,
       generated_at: new Date().toISOString(),
@@ -468,6 +477,7 @@ export class ReviewRunExecutor {
       sources: record.sources,
       missing_context: record.missing_context,
       head_sha: record.head_sha,
+      body_sha: record.body_sha,
       provider: record.provider,
       model: record.model,
       generated_at: record.generated_at,

@@ -129,6 +129,7 @@
     "outOfScope": "Out of scope",
     "outOfScopeEmpty": "Nothing explicitly excluded",
     "sourceUnavailable": "{kind} could not be read",
+    "noSpecLinked": "No spec or plan linked",
     "rerun": "Re-run",
     "outOfDate": "Intent is out of date",
     "empty": "No intent detected yet",

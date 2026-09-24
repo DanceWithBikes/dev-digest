@@ -91,17 +91,59 @@ class RepoIntentSourceCollector implements IntentSourceCollector {
     attempts: GatheredIntentSources['attempts'],
   ): Promise<GatheredSpec | null> {
     const specPath = parseSpecRef(pr.body);
-    if (!specPath) return null;
+    if (!specPath) {
+      // Recorded, not skipped: "this PR links no spec or plan" is evidence
+      // about how thin the intent's basis is, and the card says so. A null
+      // `ref` is what separates it from a spec that was named but unreadable —
+      // `describeMissingSource` renders the two differently.
+      attempts.push({ kind: 'spec', ref: null, ok: false });
+      return null;
+    }
     try {
-      const text = await this.container.git.readFile(repo, specPath);
+      const text = await this.readSpecAtHead(pr, repo, specPath);
       attempts.push({ kind: 'spec', ref: specPath, ok: true });
       return { path: specPath, text: cap(text, MAX_SPEC_CHARS) };
     } catch {
-      // Repo not cloned, path doesn't exist on this ref, etc. — best-effort.
-      // Seeded/never-cloned repos always land here (reviews/docs/insights.md).
+      // Repo not cloned, path doesn't exist on any reachable ref, etc. —
+      // best-effort. Seeded/never-cloned repos always land here
+      // (reviews/docs/insights.md).
       attempts.push({ kind: 'spec', ref: specPath, ok: false });
       return null;
     }
+  }
+
+  /**
+   * Reads the linked plan/spec AS OF THE PR'S HEAD, not off the clone's working
+   * tree. The clone is only ever advanced by `sync(repo, repo.defaultBranch)`
+   * (`repo-intel/service.ts`), so a spec a PR introduces about itself does not
+   * exist on disk until that PR merges — which is why every self-documenting PR
+   * used to render `Linked spec "…" could not be read`.
+   *
+   * Three attempts, cheapest first, first hit wins:
+   *  1. `git show <head_sha>:<path>` — no network when the sha is already in the
+   *     clone (a PR opened before the last sync, or the head already merged);
+   *  2. `fetchPullHead` (`origin pull/<n>/head:pr-<n>`, which GitHub also serves
+   *     for fork PRs) and the same read off `pr-<n>` — one fetch;
+   *  3. the working tree — the default-branch copy, all a non-GitHub remote or
+   *     an offline box can offer, and still right for an already-merged spec.
+   *
+   * Throws only if all three fail, so `resolveSpec` records `ok: false` exactly
+   * when no ref we can reach has the file.
+   */
+  private async readSpecAtHead(pr: PrForIntent, repo: RepoRef, specPath: string): Promise<string> {
+    const git = this.container.git;
+    try {
+      return await git.readFileAt(repo, pr.headSha, specPath);
+    } catch {
+      // head sha not in this clone (shallow, or pushed since the last sync).
+    }
+    try {
+      await git.fetchPullHead(repo, pr.number);
+      return await git.readFileAt(repo, `pr-${pr.number}`, specPath);
+    } catch {
+      // Not a GitHub remote, no network, or the PR ref is gone.
+    }
+    return git.readFile(repo, specPath);
   }
 }
 

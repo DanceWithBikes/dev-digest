@@ -15,6 +15,7 @@ import type {
   Repo,
   PrMeta,
   PrDetail,
+  SmartDiff,
   SpecFile,
   IndexStatus,
 } from "../types";
@@ -116,6 +117,29 @@ export function usePullDetail(prId: string | number | null | undefined) {
     queryKey: ["pull", prId],
     queryFn: () => api.get<PrDetail>(`/pulls/${prId}`),
     enabled: prId != null,
+  });
+}
+
+/** Files-changed tab: files grouped by reviewer role, with finding-line anchors. */
+export function useSmartDiff(prId: string | number | null | undefined) {
+  return useQuery({
+    queryKey: ["smart-diff", prId],
+    queryFn: () => api.get<SmartDiff>(`/pulls/${prId}/smart-diff`),
+    enabled: prId != null,
+  });
+}
+
+/**
+ * Generates `pseudocode_summary` for up to SMART_DIFF_SUMMARY_LIMIT uncached
+ * `core`-group files (button-triggered only — never called from `useSmartDiff`
+ * or on mount). The response is the refreshed Smart Diff, written straight
+ * into the query cache so the tab updates without a second round trip.
+ */
+export function useGenerateSummaries(prId: string | number | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<SmartDiff>(`/pulls/${prId}/smart-diff/summaries`),
+    onSuccess: (data) => qc.setQueryData(["smart-diff", prId], data),
   });
 }
 

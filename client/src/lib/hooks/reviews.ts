@@ -8,6 +8,7 @@ import { api, API_BASE } from "../api";
 import { notify } from "../toast";
 import type {
   FindingActionKind,
+  PrIntentRecord,
   PrReviewComment,
   ReviewRecord,
   ReviewRunResponse,
@@ -132,6 +133,29 @@ export function useRunReview() {
     onSuccess: (_d, { prId }) => {
       qc.invalidateQueries({ queryKey: ["reviews", prId] });
     },
+  });
+}
+
+// ---- intent ----
+/** Derived intent + scope for a PR (title, description, linked issue/spec,
+   changed files). `null` is the normal "not computed yet" case — the INTENT
+   card shows an empty state with a "Detect intent" action, not an error. */
+export function usePrIntent(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["pr-intent", prId],
+    queryFn: () => api.get<PrIntentRecord | null>(`/pulls/${prId}/intent`),
+    enabled: !!prId,
+  });
+}
+
+/** Re-classify + persist intent for a PR (the INTENT card's "Re-run"
+   affordance). Body-less POST — `apiFetch` only sets content-type when a
+   body is sent, and Fastify rejects an empty JSON POST otherwise. */
+export function useDetectPrIntent(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<PrIntentRecord>(`/pulls/${prId}/intent`),
+    onSuccess: (d) => qc.setQueryData(["pr-intent", prId], d),
   });
 }
 

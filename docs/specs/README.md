@@ -42,3 +42,5 @@ Open questions list verified gaps only (untested paths, doc/code contradictions)
 | Cost badge | L01 | [`cost-badge.md`](cost-badge.md) | [reviews](../../server/src/modules/reviews/docs/specs/cost-badge.md) · [pulls](../../server/src/modules/pulls/docs/specs/cost-badge.md) · [client](../../client/docs/specs/cost-badge.md) |
 | Severity filter | L01 | [`severity-filter.md`](severity-filter.md) | [pulls](../../server/src/modules/pulls/docs/specs/severity-filter.md) · [client](../../client/docs/specs/severity-filter.md) |
 | SUGGESTION severity | L01 | [`suggestion-severity.md`](suggestion-severity.md) | — (seed data + `docs/agent-prompts/`, no module code) |
+| Intent Layer | L03 | [`intent-layer.md`](intent-layer.md) | [reviews](../../server/src/modules/reviews/docs/specs/intent-layer.md) · [reviewer-core](../../reviewer-core/docs/specs/intent-layer.md) · [client](../../client/docs/specs/intent-layer.md) |
+| Smart Diff | L03 | [`smart-diff.md`](smart-diff.md) | [pulls](../../server/src/modules/pulls/docs/specs/smart-diff.md) · [client](../../client/docs/specs/smart-diff.md) |

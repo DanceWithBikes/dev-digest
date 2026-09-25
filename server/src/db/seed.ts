@@ -117,18 +117,25 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         headSha: 'a1b2c3d4e5f6',
         additions: 247,
         deletions: 38,
-        filesCount: 9,
+        // Matches the row count inserted below — was `9` while only 4 rows
+        // existed (server/docs/insights.md, 2026-09-24 entry); now honest.
+        filesCount: 7,
         status: 'needs_review',
         body: 'Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.',
       })
       .returning();
 
-    // pr_files (subset)
+    // pr_files (subset). Deliberately spans more than one Smart Diff role
+    // (core/wiring/docs/boilerplate) — with all-`core` files the Files-changed
+    // tab renders exactly one group (server/docs/insights.md, 2026-09-24 entry).
     await db.insert(t.prFiles).values([
       { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
       { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
       { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
       { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
+      { prId: pr!.id, path: 'src/api/public/index.ts', additions: 5, deletions: 0 },
+      { prId: pr!.id, path: 'README.md', additions: 12, deletions: 2 },
+      { prId: pr!.id, path: 'pnpm-lock.yaml', additions: 18, deletions: 3 },
     ]);
 
     // pr_commits

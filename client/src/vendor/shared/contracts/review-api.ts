@@ -56,8 +56,42 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
-/** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
-export const PrIntentRecord = Intent.extend({ pr_id: z.string() });
+/** One attempt to gather an intent source — provenance for the INTENT card. */
+export const IntentSource = z.object({
+  kind: z.string(),
+  ref: z.string().nullable(),
+  ok: z.boolean(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
+/**
+ * Intent persisted for a PR (the Intent plus the pr_id it scopes, and the
+ * provenance & missing-context tracking which sources resolved).
+ */
+export const PrIntentRecord = Intent.extend({
+  pr_id: z.string(),
+  sources: z.array(IntentSource).nullish(),
+  missing_context: z.array(z.string()).nullish(),
+  head_sha: z.string().nullish(),
+  /**
+   * Fingerprint of the PR description this intent was derived from. Provenance
+   * only — `stale` is what the UI reads; null on records written before the
+   * column existed.
+   */
+  body_sha: z.string().nullish(),
+  provider: z.string().nullish(),
+  model: z.string().nullish(),
+  generated_at: z.string().nullish(),
+  /**
+   * Derived server-side on read, never stored: the PR moved on since this
+   * intent was classified, so its scope bullets and — above all — its
+   * `missing_context[]` may no longer describe the PR. True when the head sha
+   * moved OR the description changed (a description edit moves no commit, so
+   * `head_sha` alone misses it entirely). Always false on the record the
+   * classifier just produced.
+   */
+  stale: z.boolean().nullish(),
+});
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 
 /** Smart-diff response for a PR (the SmartDiff). */

@@ -4,6 +4,7 @@
 
 import React from "react";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
+import { type DiffFindingAnchor } from "../findings";
 import { type Line } from "../helpers";
 import { s, lineRowFor, lineSignFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
@@ -14,11 +15,15 @@ export function CodeLine({
   path,
   threads,
   commenting,
+  findingAnchors,
+  renderFinding,
 }: {
   ln: Line;
   path: string;
   threads: CommentThread[];
   commenting?: DiffCommentApi;
+  findingAnchors?: DiffFindingAnchor[];
+  renderFinding?: (findingId: string) => React.ReactNode;
 }) {
   const [hover, setHover] = React.useState(false);
   const [composing, setComposing] = React.useState(false);
@@ -69,6 +74,9 @@ export function CodeLine({
         threads.map((th) => (
           <CommentThreadView key={th.rootId} thread={th} commenting={commenting} path={path} />
         ))}
+
+      {renderFinding &&
+        findingAnchors?.map((a) => <React.Fragment key={a.id}>{renderFinding(a.id)}</React.Fragment>)}
 
       {commenting && composing && target && (
         <InlineComposer

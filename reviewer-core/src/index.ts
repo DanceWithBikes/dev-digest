@@ -22,6 +22,11 @@ export {
 // Citation grounding — the mandatory mechanical gate for diff findings.
 export { groundFindings, groundingSummary, type GroundingResult } from './grounding.js';
 
+// Out-of-scope filtering — the second mechanical gate, run after grounding
+// when a PR intent was derived. Findings tagged `out_of_scope` are dropped
+// unless CRITICAL (one highest-confidence survivor is always kept).
+export { filterByIntent } from './intent/filter.js';
+
 // Structured-output helpers (Zod → JSON Schema + parse-with-repair).
 export {
   toJsonSchema,

@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, RunEventKind, RunTrace } from '@devdigest/shared';
+import type { FindingActionKind, PrIntentRecord, RunEventKind, RunTrace } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -7,6 +7,10 @@ import { type ReviewDto, type ReviewDtoFinding } from './helpers.js';
 import { ReviewRunExecutor, type Logger } from './run-executor.js';
 import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
+import { loadDiff } from './diff-loader.js';
+import { makeIntentEngine } from './compose.js';
+import { bodyFingerprint, deriveMissingContext, isIntentStale } from './intent-helpers.js';
+import type { IntentClassifier, IntentSourceCollector, PrForIntent } from './ports.js';
 
 // Re-export DTO types + converters for backward-compatible imports from
 // './service.js' (these previously lived here; logic now in ./helpers.ts).
@@ -29,11 +33,18 @@ export class ReviewService {
   private repo: ReviewRepository;
   private agents: Container['agentsRepo'];
   private executor: ReviewRunExecutor;
+  private intentCollector: IntentSourceCollector;
+  private intentClassifier: IntentClassifier;
 
   constructor(private container: Container) {
     this.repo = new ReviewRepository(container.db);
     this.agents = container.agentsRepo;
-    this.executor = new ReviewRunExecutor(container, this.repo, this.agents);
+    const intent = makeIntentEngine(container, this.repo);
+    this.intentCollector = intent.collector;
+    this.intentClassifier = intent.classifier;
+    // Injected, not pulled off the Container inside the executor — keeps the
+    // LLM call out of the application ring (plan §4).
+    this.executor = new ReviewRunExecutor(container, this.repo, this.agents, intent);
   }
 
   // ===========================================================================
@@ -175,5 +186,81 @@ export class ReviewService {
 
   async getRunTrace(runId: string): Promise<RunTrace | undefined> {
     return this.repo.getRunTrace(runId);
+  }
+
+  // ===========================================================================
+  // Intent (L03) — derive-once, re-run-on-demand. `getPull` scopes both
+  // reads and writes to the workspace (`pr_intent` has no workspace_id of its
+  // own — see reviews/docs/insights.md on the same hole for `/runs/:id/*`).
+  // ===========================================================================
+
+  async getIntent(workspaceId: string, prId: string): Promise<PrIntentRecord | null> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const record = await this.repo.getIntent(prId);
+    if (!record) return null;
+    // `stale` is derived here, not stored: the record goes out of date because
+    // the PULL changed (a push, or a description edit that reaches
+    // `pull_requests.body` only on the next detail sync), never because
+    // anything touched `pr_intent`.
+    return { ...record, stale: isIntentStale(record, pull) };
+  }
+
+  /**
+   * Re-classify PR intent: collect → classify → derive missing context → upsert.
+   * Mirrors the shared pre-work the review run will later do once per run;
+   * this is the standalone manual path.
+   */
+  async detectIntent(workspaceId: string, prId: string): Promise<PrIntentRecord> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const repoRow = await this.repo.getRepo(pull.repoId);
+    if (!repoRow) throw new NotFoundError('Repo not found');
+
+    const diff = await loadDiff(this.container, this.repo, workspaceId, pull, repoRow);
+    const pr: PrForIntent = {
+      id: pull.id,
+      number: pull.number,
+      title: pull.title,
+      body: pull.body,
+      headSha: pull.headSha,
+    };
+    const repoRef = { owner: repoRow.owner, name: repoRow.name };
+
+    // `diff.files` is structurally an `IntentDiffFile[]` (a superset — the
+    // collector never reads `diff.raw`), so no conversion is needed.
+    const sources = await this.intentCollector.collect(pr, repoRef, { files: diff.files });
+    const result = await this.intentClassifier.classify(workspaceId, sources);
+
+    const record: PrIntentRecord = {
+      pr_id: prId,
+      intent: result.intent.intent,
+      in_scope: result.intent.in_scope,
+      out_of_scope: result.intent.out_of_scope,
+      sources: sources.attempts,
+      missing_context: deriveMissingContext(sources.attempts),
+      head_sha: pull.headSha,
+      body_sha: bodyFingerprint(pull.body),
+      stale: false,
+      provider: result.provider,
+      model: result.model,
+      generated_at: new Date().toISOString(),
+    };
+    await this.repo.upsertIntent(prId, {
+      intent: record.intent,
+      in_scope: record.in_scope,
+      out_of_scope: record.out_of_scope,
+      sources: record.sources,
+      missing_context: record.missing_context,
+      head_sha: record.head_sha,
+      body_sha: record.body_sha,
+      provider: record.provider,
+      model: record.model,
+      generated_at: record.generated_at,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      costUsd: result.costUsd,
+    });
+    return record;
   }
 }

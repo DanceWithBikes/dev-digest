@@ -64,13 +64,20 @@
   },
   "smartDiff": {
     "coreLabel": "Core",
+    "testsLabel": "Tests",
     "wiringLabel": "Wiring",
+    "docsLabel": "Docs",
     "boilerplateLabel": "Boilerplate",
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
     "filesCount": "{count} files",
     "findingLines": "{count} finding-lines",
-    "groupedByRole": "Smart Diff · grouped by role"
+    "groupedByRole": "Smart Diff · grouped by role",
+    "smartOrder": "Smart order",
+    "originalOrder": "Original order",
+    "filesWithFindings": "{count} files with findings",
+    "generateSummaries": "Generate summaries",
+    "generatingSummaries": "Generating…"
   },
   "list": {
     "breadcrumb": "Pull Requests",
@@ -119,5 +126,20 @@
     "goToReview": "Jump to this run’s findings below",
     "openTrace": "Open run trace & logs",
     "deleteRun": "Delete run"
+  },
+  "overview": {
+    "prBrief": "PR Brief"
+  },
+  "intent": {
+    "title": "Intent",
+    "inScope": "In scope",
+    "outOfScope": "Out of scope",
+    "outOfScopeEmpty": "Nothing explicitly excluded",
+    "sourceUnavailable": "{kind} could not be read",
+    "noSpecLinked": "No spec or plan linked",
+    "rerun": "Re-run",
+    "outOfDate": "Intent is out of date",
+    "empty": "No intent detected yet",
+    "detect": "Detect intent"
   }
 }

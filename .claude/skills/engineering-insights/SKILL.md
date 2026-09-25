@@ -54,6 +54,8 @@ Never write: secrets or API keys, temporary task state, anything already in `AGE
 
 **Append-only.** Never rewrite the file with the Write tool (except creating a new one from the template) and never delete or reword other entries. Add new entries with Edit by anchoring on the section heading. The only allowed changes to existing entries are the ones in step 2.
 
+> **One exception:** the `insights-curator` subagent (`.claude/agents/insights-curator.md`) may reshape existing entries, and only in three ways — refresh a `Where:` line number whose symbol is still in the file, merge two entries in the same file on the same topic, and drop Session Notes past the ten most recent. Everything else it finds (a dead anchor, a duplicate across files, a promotion, an answered Open Question) it reports as a proposal. The append-only rule above binds every other agent, including every use of this skill.
+
 1. **Read** the target file first.
 2. **Dedupe:** if an entry on the same topic exists, update it instead of adding a new one.
    - Recurring Errors: bump the counter (`×2`, `×3`). At `×3`, propose to the user promoting the fix into that module's `AGENTS.md` as a one-line rule (keep the "why" here).

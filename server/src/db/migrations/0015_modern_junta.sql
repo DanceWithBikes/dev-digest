@@ -1,0 +1,1 @@
+ALTER TABLE "pr_intent" ADD COLUMN "body_sha" text;

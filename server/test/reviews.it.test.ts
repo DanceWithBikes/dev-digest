@@ -4,10 +4,10 @@ import { waitForPrRuns } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
-import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { MockLLMProvider, MockEmbedder, MockGitClient, MockGitHubClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { Review } from '@devdigest/shared';
+import type { Intent, Review } from '@devdigest/shared';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -58,6 +58,20 @@ const REVIEW_FIXTURE: Review = {
       kind: 'finding',
     },
   ],
+};
+
+// The Intent Layer (L03) now runs as shared pre-work on every review
+// (run-executor.ts#deriveIntent), against the `review_intent` feature model
+// (defaults to openrouter). Without this override the run falls through to a
+// REAL provider (any locally configured OPENROUTER_API_KEY), making these
+// tests' timing dependent on live network latency — mock it like the review
+// provider below so runs stay fast and deterministic. Every PR body here also
+// references "Closes #471", so `github` is mocked too (else the collector
+// makes a real, best-effort GitHub call that 404s on a repo that doesn't exist).
+const INTENT_FIXTURE: Intent = {
+  intent: 'Add rate limiting to the public API.',
+  in_scope: ['Rate limiting middleware'],
+  out_of_scope: [],
 };
 
 let repoSeq = 0;
@@ -117,8 +131,10 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
+        github: new MockGitHubClient(),
         llm: {
           [provider]: new MockLLMProvider(provider, { structured }),
+          openrouter: new MockLLMProvider('openai', { structuredBySchema: { pr_intent: INTENT_FIXTURE } }),
         },
       },
     });

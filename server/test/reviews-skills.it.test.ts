@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
-import { waitForPrRuns } from './helpers/runs.js';
+import { waitForPrRuns, waitForRunTrace } from './helpers/runs.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { Review, RunTrace } from '@devdigest/shared';
+import type { Intent, Review } from '@devdigest/shared';
 
 /**
  * The load-bearing regression for skills: what an agent is actually TOLD.
@@ -38,6 +38,18 @@ const REVIEW_FIXTURE: Review = {
   findings: [],
 };
 
+// The Intent Layer (L03) now runs as shared pre-work on every review
+// (run-executor.ts#deriveIntent), against the `review_intent` feature model
+// (defaults to openrouter). Without this override the run would fall through
+// to a REAL provider (any locally configured OPENROUTER_API_KEY), making this
+// test's timing dependent on live network latency — mock it like the review
+// provider above so the run stays fast and deterministic.
+const INTENT_FIXTURE: Intent = {
+  intent: 'Apply a coupon discount to the checkout flow.',
+  in_scope: ['Coupon discount calculation'],
+  out_of_scope: [],
+};
+
 d('skills reach the prompt (Testcontainers pg)', () => {
   let pg: PgFixture;
   let workspaceId: string;
@@ -52,7 +64,10 @@ d('skills reach the prompt (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
-        llm: { openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }) },
+        llm: {
+          openai: new MockLLMProvider('openai', { structured: REVIEW_FIXTURE }),
+          openrouter: new MockLLMProvider('openai', { structuredBySchema: { pr_intent: INTENT_FIXTURE } }),
+        },
       },
     });
 
@@ -137,11 +152,8 @@ d('skills reach the prompt (Testcontainers pg)', () => {
     expect(res.statusCode).toBe(200);
     const runs = await waitForPrRuns(pg.handle.db, prId, { expected: 1 });
     expect(runs[0]!.status).toBe('done');
-    const [row] = await pg.handle.db
-      .select()
-      .from(t.runTraces)
-      .where(eq(t.runTraces.runId, runs[0]!.id));
-    return (row!.trace as RunTrace).prompt_assembly.skills;
+    const trace = await waitForRunTrace(pg.handle.db, runs[0]!.id);
+    return trace.prompt_assembly.skills;
   }
 
   it('omits the section entirely when the agent has no skills', async () => {

@@ -26,6 +26,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Recurring Errors & Fixes
 
+- **2026-09-25 · `Resource not accessible by personal access token` when posting an inline comment (×1)** — GitHub 403 on `POST /repos/:o/:r/pulls/:n/comments`. Root cause is never the request shape: the fine-grained PAT is missing `Pull requests: Read and write` for that repo (classic PAT: the `repo` scope). It looks like a studio bug because every READ still works — a fine-grained token gets permissionless read on PUBLIC repos, so the PR, its files and its existing comments all load, and only the write 403s. Confirm with the response header rather than guessing: `curl -i -H "Authorization: Bearer $TOK" .../pulls` prints `x-accepted-github-permissions: pull_requests=read`. Fix is in the token settings, not the code; the service now answers 403 with `COMMENT_FORBIDDEN_MESSAGE` so the toast names the permission instead of echoing GitHub's URL. For a repo under an org, the org must additionally approve the fine-grained token.
+  Where: `service.ts:237` (`github_forbidden` branch in `createComment`), `constants.ts:47` (`COMMENT_FORBIDDEN_MESSAGE`), `server/test/pulls-comment-errors.test.ts:60` (the 401/403 case)
+
 ## Session Notes
 
 ## Open Questions

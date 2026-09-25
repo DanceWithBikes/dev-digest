@@ -9,6 +9,7 @@ import type {
 import { Review as ReviewSchema } from '@devdigest/shared';
 import { assemblePrompt } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
+import { filterByIntent } from '../intent/filter.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 
 /**
@@ -71,6 +72,13 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /**
+   * Derived PR intent/scope (untrusted; delimiter-wrapped in the prompt).
+   * When present, findings may be tagged `out_of_scope` and the scope filter
+   * runs after grounding. Empty/undefined → section omitted, filter is a
+   * no-op.
+   */
+  intent?: string;
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -135,6 +143,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
     task: input.task,
   };
 
@@ -201,11 +210,23 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   }
   emit('result', `Citation grounding: ${grounding}`);
 
-  // Score is derived from the findings that SURVIVED grounding (not the model's
-  // self-reported number, and not the pre-grounding set) so the score, the
-  // findings list, and the deterministic event always agree.
+  // Out-of-scope filtering — the second mechanical gate, run only when an
+  // intent slot was supplied (no-op otherwise: byte-identical to before this
+  // gate existed). Runs AFTER grounding, BEFORE the score recompute, so
+  // dropped findings never distort the score either.
+  const hasIntent = Boolean(input.intent && input.intent.trim().length > 0);
+  const scoped: { kept: Finding[]; dropped: { finding: Finding; reason: string }[] } = hasIntent
+    ? filterByIntent(ground.kept)
+    : { kept: ground.kept, dropped: [] };
+  for (const d of scoped.dropped) {
+    emit('info', `intent filter dropped "${d.finding.title}": ${d.reason}`);
+  }
+
+  // Score is derived from the findings that SURVIVED both gates (not the
+  // model's self-reported number, and not the pre-filter set) so the score,
+  // the findings list, and the deterministic event always agree.
   return {
-    review: { ...merged, findings: ground.kept, score: scoreFromFindings(ground.kept) },
+    review: { ...merged, findings: scoped.kept, score: scoreFromFindings(scoped.kept) },
     grounding,
     dropped: ground.dropped,
     mode,

@@ -180,7 +180,17 @@ export interface GitClient {
   diff(repo: RepoRef, base: string, head: string): Promise<UnifiedDiff>;
   blame(repo: RepoRef, path: string): Promise<BlameLine[]>;
   log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
+  /** Reads `path` from the working tree of the clone — i.e. the tip of the
+   *  repo's default branch, the only ref `sync()` ever advances. */
   readFile(repo: RepoRef, path: string): Promise<string>;
+  /**
+   * Reads `path` as of `ref` (`git show <ref>:<path>`) without touching the
+   * working tree — the only way to see a file that exists on a PR's head but
+   * not on the default branch the clone tracks. `ref` is any revision the
+   * clone can resolve: a sha, a branch, or the `pr-<n>` ref `fetchPullHead`
+   * creates. Rejects when the ref or the path is unknown there.
+   */
+  readFileAt(repo: RepoRef, ref: string, path: string): Promise<string>;
   clonePathFor(repo: RepoRef): string;
 }
 

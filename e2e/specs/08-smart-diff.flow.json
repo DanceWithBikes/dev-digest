@@ -1,6 +1,6 @@
 {
   "name": "PR detail Files changed tab renders Smart Diff groups, collapse, and the order toggle",
-  "description": "From PR #482, open the Files changed tab and confirm Smart Diff grouping (Rule 1): a role group header ('Docs') renders, collapsing it shows the 'N files' summary, and switching to Original order still shows the seeded file (src/config.ts). Read-only seeded data (no model call, no chat) — the seed spans core/wiring/docs/boilerplate roles so more than one group exists (see server/docs/insights.md). Assumes a freshly-seeded DB (see e2e/README.md). Flow 05 stays the flat-list regression guard; this flow is Smart Diff's own coverage.",
+  "description": "From PR #482, open the Files changed tab and confirm Smart Diff grouping (Rule 1): a role group header ('Docs') renders, collapsing it shows the 'N files' summary, and switching to Original order still shows the seeded file (src/config.ts). Read-only seeded data (no model call, no chat) — the seed spans core/wiring/docs/boilerplate roles so more than one group exists (see server/docs/insights.md). Assumes a freshly-seeded DB (see e2e/README.md). Flow 05 stays the flat-list regression guard; this flow is Smart Diff's own coverage. NOTE: `wait --text` reads `document.body.innerText`, which reflects the header's `text-transform: uppercase` CSS — so that step matches 'DOCS', not the label's actual DOM text 'Docs'. The collapse click needs `--exact` (Next.js inlines the full next-intl messages blob, which contains the substring 'Docs', into a `<script>` tag that a non-exact `find text` can resolve to instead of the real header span) AND an explicit scroll first: the app scrolls inside `<main>`, not `window`, and the Docs group sits below the fold at the default viewport height, so the click silently lands nowhere without it (see e2e/docs/insights.md).",
   "steps": [
     { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
     { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
@@ -9,8 +9,9 @@
     { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
     { "cmd": ["find", "role", "button", "click", "--name", "Files changed"], "label": "switch to the Files changed tab" },
     { "cmd": ["wait", "--url", "tab=diff"], "label": "diff tab is active in the URL" },
-    { "cmd": ["wait", "--text", "Docs"], "label": "a Smart Diff role group header renders (README.md's group)" },
-    { "cmd": ["find", "text", "Docs", "click"], "label": "collapse the Docs group" },
+    { "cmd": ["wait", "--text", "DOCS"], "label": "a Smart Diff role group header renders (README.md's group)" },
+    { "cmd": ["scroll", "down", "700", "--selector", "main"], "label": "scroll the Docs group into view (it scrolls inside main, not window)" },
+    { "cmd": ["find", "text", "Docs", "click", "--exact"], "label": "collapse the Docs group" },
     { "cmd": ["wait", "--text", "1 files"], "label": "collapsed group shows its file-count summary" },
     { "cmd": ["find", "role", "button", "click", "--name", "Original order"], "label": "switch back to the flat, GitHub-ordered list" },
     { "cmd": ["wait", "--text", "src/config.ts"], "label": "the seeded file still renders in Original order" }

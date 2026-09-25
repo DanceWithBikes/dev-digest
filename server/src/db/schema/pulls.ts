@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, timestamp, uniqueIndex, index, primaryKey, doublePrecision } from 'drizzle-orm/pg-core';
 import { workspaces } from './core';
 import { repos } from './repos';
 
@@ -54,3 +54,34 @@ export const prCommits = pgTable('pr_commits', {
   author: text('author').notNull(),
   committedAt: timestamp('committed_at', { withTimezone: true }),
 });
+
+/**
+ * Cached "pseudocode summary" of one file's patch (Smart Diff, `core` group
+ * only), keyed by `(pr_id, path)` — NOT a column on `pr_files`, because
+ * `PullsRepository.replaceFiles` deletes and reinserts every `pr_files` row on
+ * each `GET /pulls/:id`, which would wipe a summary on every detail refresh
+ * (`pulls/repository.ts`). `patchSha` is the invalidation key: a stored summary
+ * is only served (`buildSmartDiff`) while it still matches the current patch's
+ * hash, same idea as `pr_intent.headSha`/`bodySha` (`schema/reviews.ts`). The
+ * PK's leftmost column is `pr_id`, so the FK needs no extra index.
+ */
+export const prFileSummary = pgTable(
+  'pr_file_summary',
+  {
+    prId: uuid('pr_id')
+      .notNull()
+      .references(() => pullRequests.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    patchSha: text('patch_sha').notNull(),
+    summary: text('summary').notNull(),
+    provider: text('provider'),
+    model: text('model'),
+    tokensIn: integer('tokens_in'),
+    tokensOut: integer('tokens_out'),
+    costUsd: doublePrecision('cost_usd'),
+    generatedAt: timestamp('generated_at', { withTimezone: true }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.prId, t.path] }),
+  }),
+);

@@ -100,3 +100,38 @@ export interface StoredCommit {
   author: string;
   committedAt: Date | null;
 }
+
+/**
+ * Where one finding anchors in the diff, for the Smart Diff tab's per-line dot.
+ * Drawn from ALL of the PR's `kind: 'review'` runs (accepted and dismissed
+ * included) — the client's finding cards come from the same unfiltered set
+ * (`usePrReviews`), so a dot from only the latest run would disagree with them.
+ */
+export interface FindingAnchor {
+  file: string;
+  startLine: number;
+}
+
+/**
+ * A file's cached pseudocode summary (Smart Diff, `core` group only), keyed to
+ * the SHA-1 of the patch it describes. `buildSmartDiff` serves `summary` only
+ * while `patchSha` still matches the file's CURRENT patch — a stale row is
+ * left in place (not deleted) so a future re-generation can overwrite it, but
+ * a read never surfaces it as if it still described the diff.
+ */
+export interface FileSummaryRecord {
+  path: string;
+  patchSha: string;
+  summary: string;
+}
+
+/** What persisting a freshly generated summary needs, beyond `(prId, path)`. */
+export interface FileSummaryWrite {
+  patchSha: string;
+  summary: string;
+  provider: string;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number | null;
+}

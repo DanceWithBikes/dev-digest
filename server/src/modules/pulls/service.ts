@@ -4,18 +4,26 @@ import type {
   PrDetail,
   PrMeta,
   PrReviewComment,
+  SmartDiff,
 } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
-import type { PullRecord, PullRepoRef } from './domain.js';
+import type { FileSummaryRecord, PullRecord, PullRepoRef } from './domain.js';
 import type { PullsRepository } from './repository.js';
-import type { WarnLogger } from './ports.js';
+import type { SummaryGenerator, WarnLogger } from './ports.js';
 import {
+  buildSmartDiff,
+  classifyFile,
   groupFindingsByReview,
+  patchSha,
   pickLatestReviews,
   toPersistedPrDetail,
   toPrMetaDto,
 } from './helpers.js';
-import { DIFF_STAT_BACKFILL_LIMIT } from './constants.js';
+import {
+  COMMENT_FORBIDDEN_MESSAGE,
+  DIFF_STAT_BACKFILL_LIMIT,
+  SMART_DIFF_SUMMARY_LIMIT,
+} from './constants.js';
 
 /**
  * Pulls use cases — import PRs from GitHub and serve them.
@@ -31,6 +39,8 @@ export interface PullsDeps {
   /** Rejects when no token is configured — callers decide whether that is fatal. */
   github: () => Promise<GitHubClient>;
   log: WarnLogger;
+  /** The one step that calls a model, for `generateSummaries` (step 8). */
+  summaryGenerator: SummaryGenerator;
 }
 
 export class PullsService {
@@ -116,6 +126,72 @@ export class PullsService {
   }
 
   /**
+   * Smart Diff for the Files-changed tab: files grouped by role (Rule 1) with
+   * finding-line anchors (Rule 2) and any still-valid cached summaries (step
+   * 8). No GitHub call and no model call — pulls reads are local-first and
+   * never fail the request (`pulls/AGENTS.md`); reading `pr_file_summary` is a
+   * plain join, not generation, so the GET stays exactly as fast.
+   */
+  async smartDiff(workspaceId: string, prId: string): Promise<SmartDiff> {
+    const { repo } = this.deps;
+    const pr = await repo.getPull(workspaceId, prId);
+    if (!pr) throw new NotFoundError('Pull request not found');
+    const [files, anchors, summaries] = await Promise.all([
+      repo.listFiles(pr.id),
+      repo.findingAnchorsForPull(pr.id),
+      repo.getFileSummaries(pr.id),
+    ]);
+    return buildSmartDiff(files, anchors, summaryMap(summaries));
+  }
+
+  /**
+   * Generates the `pseudocode_summary` for up to `SMART_DIFF_SUMMARY_LIMIT`
+   * `core`-group files that have no valid cache entry yet (the user's cost
+   * decision: only `core`, only on demand, only uncached, capped). Returns the
+   * refreshed Smart Diff so the caller can render immediately without a
+   * second round trip. A single file's generation failure is logged and
+   * skipped — it never fails the other files in the same batch.
+   */
+  async generateSummaries(workspaceId: string, prId: string): Promise<SmartDiff> {
+    const { repo, summaryGenerator, log } = this.deps;
+    const pr = await repo.getPull(workspaceId, prId);
+    if (!pr) throw new NotFoundError('Pull request not found');
+
+    const [files, existing] = await Promise.all([repo.listFiles(pr.id), repo.getFileSummaries(pr.id)]);
+    const existingByPath = summaryMap(existing);
+    const targets = files
+      .filter((f) => classifyFile(f.path) === 'core')
+      .filter((f) => {
+        const cached = existingByPath.get(f.path);
+        return !cached || cached.patchSha !== patchSha(f.patch);
+      })
+      .slice(0, SMART_DIFF_SUMMARY_LIMIT);
+
+    for (const file of targets) {
+      try {
+        const result = await summaryGenerator.summarize(workspaceId, { path: file.path, patch: file.patch });
+        await repo.upsertFileSummary(pr.id, file.path, {
+          patchSha: patchSha(file.patch),
+          summary: result.summary,
+          provider: result.provider,
+          model: result.model,
+          tokensIn: result.tokensIn,
+          tokensOut: result.tokensOut,
+          costUsd: result.costUsd,
+        });
+      } catch (err) {
+        log.warn({ err, path: file.path }, 'Smart Diff summary generation failed');
+      }
+    }
+
+    const [anchors, summaries] = await Promise.all([
+      repo.findingAnchorsForPull(pr.id),
+      repo.getFileSummaries(pr.id),
+    ]);
+    return buildSmartDiff(files, anchors, summaryMap(summaries));
+  }
+
+  /**
    * Inline review comments are proxied live to GitHub with NO local mirror:
    * the Files-changed tab must stay in lock-step with the PR, and a stale local
    * copy is worse than an empty list.
@@ -154,6 +230,14 @@ export class PullsService {
         ...(input.in_reply_to != null ? { inReplyTo: input.in_reply_to } : {}),
       });
     } catch (err) {
+      // 401/403 is the token's permissions, not the request — its raw GitHub
+      // message is unactionable, so swap in the one that names the fix.
+      const status = (err as { status?: number } | null)?.status;
+      if (status === 401 || status === 403) {
+        throw new AppError('github_forbidden', COMMENT_FORBIDDEN_MESSAGE, 403, {
+          cause: String(err),
+        });
+      }
       // GitHub rejects comments on lines outside the diff / on closed PRs (422).
       const msg = err instanceof Error ? err.message : 'Failed to post the comment to GitHub.';
       throw new AppError('github_comment_failed', msg, 400, { cause: String(err) });
@@ -241,4 +325,9 @@ export class PullsService {
       }
     }
   }
+}
+
+/** `FileSummaryRecord[]` → keyed by path, what `buildSmartDiff`'s third argument expects. */
+function summaryMap(rows: FileSummaryRecord[]): Map<string, FileSummaryRecord> {
+  return new Map(rows.map((r) => [r.path, r]));
 }

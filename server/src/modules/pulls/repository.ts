@@ -3,6 +3,9 @@ import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type {
   DiffStats,
+  FileSummaryRecord,
+  FileSummaryWrite,
+  FindingAnchor,
   ImportedPull,
   LatestReview,
   PullRecord,
@@ -168,6 +171,20 @@ export class PullsRepository {
     return out;
   }
 
+  /**
+   * File/line anchors for the Smart Diff tab's per-line dot, drawn from ALL of
+   * the PR's `kind: 'review'` runs — accepted and dismissed findings included,
+   * so a dot never disagrees with the finding card underneath it (which comes
+   * from the same unfiltered `usePrReviews` set on the client).
+   */
+  async findingAnchorsForPull(prId: string): Promise<FindingAnchor[]> {
+    return this.db
+      .select({ file: t.findings.file, startLine: t.findings.startLine })
+      .from(t.findings)
+      .innerJoin(t.reviews, eq(t.findings.reviewId, t.reviews.id))
+      .where(and(eq(t.reviews.prId, prId), eq(t.reviews.kind, 'review')));
+  }
+
   async listFiles(prId: string): Promise<StoredFile[]> {
     return this.db
       .select({
@@ -206,5 +223,35 @@ export class PullsRepository {
     if (commits.length > 0) {
       await this.db.insert(t.prCommits).values(commits.map((c) => ({ prId, ...c })));
     }
+  }
+
+  /**
+   * Cached Smart Diff summaries for a PR — lives in its own table, NOT
+   * `pr_files`, so it survives `replaceFiles`'s delete-then-reinsert on every
+   * `GET /pulls/:id` (`pr_file_summary`, `db/schema/pulls.ts`).
+   */
+  async getFileSummaries(prId: string): Promise<FileSummaryRecord[]> {
+    return this.db
+      .select({ path: t.prFileSummary.path, patchSha: t.prFileSummary.patchSha, summary: t.prFileSummary.summary })
+      .from(t.prFileSummary)
+      .where(eq(t.prFileSummary.prId, prId));
+  }
+
+  /** Upsert one file's summary, keyed by the composite `(pr_id, path)` PK. */
+  async upsertFileSummary(prId: string, path: string, write: FileSummaryWrite): Promise<void> {
+    const set = {
+      patchSha: write.patchSha,
+      summary: write.summary,
+      provider: write.provider,
+      model: write.model,
+      tokensIn: write.tokensIn,
+      tokensOut: write.tokensOut,
+      costUsd: write.costUsd,
+      generatedAt: new Date(),
+    };
+    await this.db
+      .insert(t.prFileSummary)
+      .values({ prId, path, ...set })
+      .onConflictDoUpdate({ target: [t.prFileSummary.prId, t.prFileSummary.path], set });
   }
 }

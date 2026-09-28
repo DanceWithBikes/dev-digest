@@ -78,6 +78,27 @@ export async function getReview(db: Db, reviewId: string): Promise<ReviewRow | u
   return row;
 }
 
+/**
+ * The review a run produced (+ its findings), workspace-scoped — the MCP
+ * surface's `get_findings` poll target. `reviews.workspace_id` is a real
+ * column (unlike `pr_intent`), so this needs no join through the PR.
+ * `undefined` for a run with no review yet (still running, or it failed
+ * before persisting one) — the caller falls back to `run` alone.
+ */
+export async function reviewForRun(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<{ review: ReviewRow; findings: FindingRow[] } | undefined> {
+  const [review] = await db
+    .select()
+    .from(t.reviews)
+    .where(and(eq(t.reviews.workspaceId, workspaceId), eq(t.reviews.runId, runId)));
+  if (!review) return undefined;
+  const findings = await db.select().from(t.findings).where(eq(t.findings.reviewId, review.id));
+  return { review, findings };
+}
+
 /** Delete a whole review (one agent's run) + its findings (cascade), scoped
  *  to the workspace. Returns false if not found in the workspace. */
 export async function deleteReview(

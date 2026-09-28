@@ -84,6 +84,24 @@ flowchart TB
   HEALTH["/health (liveness) · /health/ready (DB ping → 200/503)"]
 ```
 
+## MCP server (stdio)
+
+`src/mcp/` exposes 5 tools to an MCP client (Claude Code / Desktop / Cursor) —
+`list_agents`, `run_agent_on_pr`, `get_findings`, `get_conventions`,
+`get_blast_radius` (stub) — over **stdio only**, no HTTP step. It runs in the
+same process against the same application services this API uses, wired
+through its own composition root (`src/mcp/compose.ts`), not through Fastify.
+
+```sh
+pnpm mcp   # tsx src/mcp.ts — no watch variant, it prints to stdout on rerun
+```
+
+Registered for Claude Code in the repo-root `.mcp.json`
+(`{"mcpServers":{"devdigest":{"type":"stdio","command":"pnpm","args":["--silent","--dir","server","mcp"]}}}`).
+Full picture, the start→poll sequence, and the local-DB-only PR/repo resolver:
+[`docs/specs/devdigest-mcp.md`](../docs/specs/devdigest-mcp.md) ·
+`src/mcp/AGENTS.md`.
+
 ## Environment
 
 `server/.env` (copied from `.env.example`):

@@ -36,22 +36,12 @@ export async function activeRunsForPull(
   }));
 }
 
-/** All runs for a PR (any status), newest first — the PR run history. */
-export async function listRunsForPull(
-  db: Db,
-  workspaceId: string,
-  prId: string,
-): Promise<RunSummary[]> {
-  const rows = await db
-    .select({ run: t.agentRuns, agentName: t.agents.name })
-    .from(t.agentRuns)
-    .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
-    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
-    .orderBy(desc(t.agentRuns.ranAt));
-  return rows.map(({ run, agentName }) => ({
+/** One `agent_runs` row (+ its agent's name) → the transport `RunSummary`. */
+function toRunSummary(run: typeof t.agentRuns.$inferSelect, agentName: string | null): RunSummary {
+  return {
     run_id: run.id,
     agent_id: run.agentId,
-    agent_name: agentName ?? null,
+    agent_name: agentName,
     provider: run.provider,
     model: run.model,
     status: run.status,
@@ -65,7 +55,37 @@ export async function listRunsForPull(
     ran_at: run.ranAt ? run.ranAt.toISOString() : null,
     score: run.score,
     blockers: run.blockers,
-  }));
+  };
+}
+
+/** All runs for a PR (any status), newest first — the PR run history. */
+export async function listRunsForPull(
+  db: Db,
+  workspaceId: string,
+  prId: string,
+): Promise<RunSummary[]> {
+  const rows = await db
+    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .from(t.agentRuns)
+    .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
+    .orderBy(desc(t.agentRuns.ranAt));
+  return rows.map(({ run, agentName }) => toRunSummary(run, agentName ?? null));
+}
+
+/**
+ * One run by id, workspace-scoped — the MCP surface's poll target
+ * (`get_findings`). Unlike `/runs/:id/*`'s HTTP routes (`docs/insights.md`),
+ * this closes the scope gap: a run id from another workspace 404s instead of
+ * being served.
+ */
+export async function getRunSummary(db: Db, workspaceId: string, runId: string): Promise<RunSummary | undefined> {
+  const [row] = await db
+    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .from(t.agentRuns)
+    .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.id, runId)));
+  return row ? toRunSummary(row.run, row.agentName ?? null) : undefined;
 }
 
 /**

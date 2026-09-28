@@ -9,6 +9,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Codebase Patterns
 
+- **2026-09-28 · The `blast/service.ts` comment is a forward-reference to a module that doesn't exist yet — don't go looking for it** — `types.ts`'s Blast radius section says `getBlastRadius` is "Adopted by blast/service.ts in T2"; there is no `server/src/modules/blast/` anywhere in the repo (`find server/src/modules -iname '*blast*'` → nothing). The comment describes a planned FUTURE module, written before it existed and never updated once the stub landed elsewhere: the MCP surface's `get_blast_radius` tool (L04, `server/src/mcp/tools/get-blast-radius.ts`) is the current placeholder for this facade method, and it does not call `getBlastRadius` at all yet — it always returns `isError`. When a real `blast` (or similarly-named) module is finally built, it is the one that should call `container.repoIntel.getBlastRadius`, and this comment should be updated to point at it instead of describing it prospectively.
+  Where: `types.ts:53` (`// Blast radius (facade method \`getBlastRadius\`). Adopted by blast/service.ts in T2...`), `types.ts:147` (`getBlastRadius` signature), `../../mcp/tools/get-blast-radius.ts:1` (the current placeholder, unrelated to this facade method today)
+
 ## Tool & Library Notes
 
 ## Recurring Errors & Fixes

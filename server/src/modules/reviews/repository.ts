@@ -85,6 +85,20 @@ export class ReviewRepository {
     return runRepo.listRunsForPull(this.db, workspaceId, prId);
   }
 
+  /** One run by id, workspace-scoped — the MCP surface's `get_findings` poll target. */
+  getRunSummary(workspaceId: string, runId: string): Promise<RunSummary | undefined> {
+    return runRepo.getRunSummary(this.db, workspaceId, runId);
+  }
+
+  /** The review a run produced (+ findings), workspace-scoped; undefined
+   *  before a review is persisted (still running, or failed pre-persist). */
+  reviewForRun(
+    workspaceId: string,
+    runId: string,
+  ): Promise<{ review: ReviewRow; findings: FindingRow[] } | undefined> {
+    return reviewRepo.reviewForRun(this.db, workspaceId, runId);
+  }
+
   /** Delete one agent run (+ its trace via FK cascade). Workspace-scoped. */
   deleteAgentRun(workspaceId: string, runId: string): Promise<boolean> {
     return runRepo.deleteAgentRun(this.db, workspaceId, runId);

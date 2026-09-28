@@ -11,11 +11,19 @@ export interface DbHandle {
 }
 
 /**
- * Create a Drizzle client over postgres-js. Used by the app (one shared handle)
- * and by the Testcontainers harness (per-test handle).
+ * Create a Drizzle client over postgres-js. Used by the app (one shared handle),
+ * the Testcontainers harness (per-test handle) and the MCP stdio entrypoint.
  */
-export function createDb(databaseUrl: string, opts?: { max?: number }): DbHandle {
-  const sql = postgres(databaseUrl, { max: opts?.max ?? 10 });
+export function createDb(
+  databaseUrl: string,
+  opts?: { max?: number; /** postgres.js logs server NOTICEs to stdout by default; the
+   *  MCP process's stdout is the JSON-RPC transport, so it must supply one. */
+    onnotice?: (notice: postgres.Notice) => void },
+): DbHandle {
+  const sql = postgres(databaseUrl, {
+    max: opts?.max ?? 10,
+    ...(opts?.onnotice ? { onnotice: opts.onnotice } : {}),
+  });
   const db = drizzle(sql, { schema });
   return {
     db,

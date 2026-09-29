@@ -4,6 +4,9 @@ import {
   Finding,
   Intent,
   BlastRadius,
+  BlastDegradedReason,
+  BlastRadiusResponse,
+  PrHistoryResponse,
   Risks,
   PrHistory,
   SmartDiff,
@@ -104,6 +107,63 @@ describe('AI contracts parse fixtures', () => {
         ],
       }),
     ).not.toThrow();
+  });
+
+  it('BlastRadius carries an optional degraded/reason, and BlastCaller an optional endpoints/crons', () => {
+    // degraded/reason and per-caller endpoints/crons are both optional — an
+    // older-shaped payload (no such keys) must still parse.
+    expect(() =>
+      BlastRadius.parse({
+        changed_symbols: [{ name: 'rateLimit', file: 'a.ts', kind: 'function' }],
+        downstream: [
+          {
+            symbol: 'rateLimit',
+            callers: [{ name: 'publicRouter', file: 'b.ts', line: 23 }],
+            endpoints_affected: [],
+            crons_affected: [],
+          },
+        ],
+        summary: 's',
+      }),
+    ).not.toThrow();
+
+    const degraded = BlastRadius.parse({
+      changed_symbols: [],
+      downstream: [],
+      summary: '0 symbols · 0 callers · 0 endpoints · 0 crons',
+      degraded: true,
+      reason: 'index_partial',
+    });
+    expect(degraded.reason).toBe('index_partial');
+
+    const withFacts = BlastRadius.parse({
+      changed_symbols: [{ name: 'rateLimit', file: 'a.ts', kind: 'function' }],
+      downstream: [
+        {
+          symbol: 'rateLimit',
+          callers: [
+            { name: 'publicRouter', file: 'b.ts', line: 23, endpoints: ['GET /x'], crons: ['nightly-sync'] },
+          ],
+          endpoints_affected: ['GET /x'],
+          crons_affected: ['nightly-sync'],
+        },
+      ],
+      summary: 's',
+    });
+    expect(withFacts.downstream[0]!.callers[0]!.endpoints).toEqual(['GET /x']);
+
+    expect(BlastDegradedReason.options).toEqual([
+      'flag_off',
+      'index_failed',
+      'index_partial',
+      'repo_too_large',
+      'no_data',
+    ]);
+  });
+
+  it('BlastRadiusResponse / PrHistoryResponse are BlastRadius / PrHistory (route response schemas)', () => {
+    expect(BlastRadiusResponse).toBe(BlastRadius);
+    expect(PrHistoryResponse).toBe(PrHistory);
   });
 
   it('SmartDiff (data.jsx DIFF)', () => {

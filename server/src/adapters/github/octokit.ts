@@ -11,6 +11,8 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  CommitRef,
+  CommitPullRef,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
@@ -132,6 +134,47 @@ export class OctokitGitHubClient implements GitHubClient {
     } catch {
       return undefined;
     }
+  }
+
+  /** Recent commits that touched `path` (newest first) — Prior PRs' evidence trail. */
+  async listCommitsForPath(repo: RepoRef, path: string, limit: number): Promise<CommitRef[]> {
+    return withRetry(() =>
+      withTimeout(
+        (async () => {
+          const res = await this.octokit.rest.repos.listCommits({
+            owner: repo.owner,
+            repo: repo.name,
+            path,
+            per_page: limit,
+          });
+          return res.data.map((c) => ({ sha: c.sha }));
+        })(),
+        TIMEOUT,
+      ),
+    );
+  }
+
+  /** PRs GitHub associates with a commit sha — usually the one that merged it. */
+  async listPullsForCommit(repo: RepoRef, sha: string): Promise<CommitPullRef[]> {
+    return withRetry(() =>
+      withTimeout(
+        (async () => {
+          const res = await this.octokit.rest.repos.listPullRequestsAssociatedWithCommit({
+            owner: repo.owner,
+            repo: repo.name,
+            commit_sha: sha,
+          });
+          return res.data.map((pr) => ({
+            number: pr.number,
+            title: pr.title,
+            author: pr.user?.login ?? 'unknown',
+            mergedAt: pr.merged_at,
+            state: pr.state,
+          }));
+        })(),
+        TIMEOUT,
+      ),
+    );
   }
 
   async postReview(

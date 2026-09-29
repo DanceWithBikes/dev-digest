@@ -3,6 +3,8 @@
 ## Commands
 ```sh
 pnpm dev                                              # tsx, :3001
+pnpm mcp                                              # tsx, MCP server over stdio (no watch — prints to stdout)
+pnpm mcp:inspect                                      # MCP Inspector 2.x web UI, launches the server from ../.mcp.json (needs Node ≥22.19)
 pnpm test                                             # unit + integration
 pnpm exec vitest run --exclude '**/*.it.test.ts'      # unit, no Docker
 pnpm exec vitest run .it.test                         # integration, needs Docker
@@ -13,6 +15,7 @@ pnpm arch:check                                       # import-boundary gate (On
 
 ## Map
 - `src/modules/` — features (each is a Fastify plugin), see `src/modules/AGENTS.md`
+- `src/mcp/` — the DevDigest MCP server (stdio only), see `src/mcp/AGENTS.md`; entrypoint `src/mcp.ts`
 - `src/adapters/` — the outside world (LLM, GitHub, git, ast-grep…) + `mocks.ts`
 - `src/platform/` — DI container, config, SSE, jobs, errors, run logging
 - `src/db/` — Drizzle schema, migrations, seed

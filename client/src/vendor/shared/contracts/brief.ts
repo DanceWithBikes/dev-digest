@@ -14,6 +14,20 @@ export const Intent = z.object({
 export type Intent = z.infer<typeof Intent>;
 
 // ---- Blast radius ----
+/**
+ * Why the map is incomplete or missing, surfaced straight from repo-intel's
+ * facade (`repo-intel/types.ts#DegradedReason`) so the UI/MCP can show a
+ * specific notice instead of a silent empty map.
+ */
+export const BlastDegradedReason = z.enum([
+  'flag_off',
+  'index_failed',
+  'index_partial',
+  'repo_too_large',
+  'no_data',
+]);
+export type BlastDegradedReason = z.infer<typeof BlastDegradedReason>;
+
 export const ChangedSymbol = z.object({
   name: z.string(),
   file: z.string(),
@@ -25,6 +39,9 @@ export const BlastCaller = z.object({
   name: z.string(),
   file: z.string(),
   line: z.number().int(),
+  /** "METHOD /path" entries reachable through this specific caller (facts of its file). */
+  endpoints: z.array(z.string()).optional(),
+  crons: z.array(z.string()).optional(),
 });
 export type BlastCaller = z.infer<typeof BlastCaller>;
 
@@ -40,6 +57,9 @@ export const BlastRadius = z.object({
   changed_symbols: z.array(ChangedSymbol),
   downstream: z.array(DownstreamImpact),
   summary: z.string(),
+  /** True when repo-intel could not build a complete map — see `reason`. */
+  degraded: z.boolean().optional(),
+  reason: BlastDegradedReason.optional(),
 });
 export type BlastRadius = z.infer<typeof BlastRadius>;
 

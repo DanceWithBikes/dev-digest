@@ -46,6 +46,40 @@ export interface PullsDeps {
 export class PullsService {
   constructor(private deps: PullsDeps) {}
 
+  /**
+   * Resolve a repo by its studio id or by "owner/name" (case-insensitive),
+   * workspace-scoped. Local-DB only — never syncs with GitHub, so a repo that
+   * exists upstream but was never imported here 404s rather than being
+   * fetched on the spot. Used by the MCP surface's tools (`src/mcp/`), which
+   * accept either form of reference from the caller.
+   */
+  async resolveRepo(workspaceId: string, ref: { repoId?: string; fullName?: string }): Promise<PullRepoRef> {
+    const repo = ref.repoId
+      ? await this.deps.repo.getRepo(workspaceId, ref.repoId)
+      : ref.fullName
+        ? await this.deps.repo.findRepoByFullName(workspaceId, ref.fullName)
+        : undefined;
+    if (!repo) {
+      throw new NotFoundError(
+        `Repo "${ref.repoId ?? ref.fullName}" not found in this workspace. Import it in the studio first.`,
+      );
+    }
+    return repo;
+  }
+
+  /**
+   * Resolve a PR by repo + number, workspace-scoped. Local-DB only, same
+   * reasoning as `resolveRepo` — a PR that exists on GitHub but was never
+   * imported here 404s instead of triggering a fetch.
+   */
+  async resolvePull(workspaceId: string, repoId: string, number: number): Promise<PullRecord> {
+    const pull = await this.deps.repo.findPullByNumber(workspaceId, repoId, number);
+    if (!pull) {
+      throw new NotFoundError(`PR #${number} not found for this repo in this workspace. Open it in the studio first.`);
+    }
+    return pull;
+  }
+
   /** PRs of one repo, with the latest review's score, findings and total cost. */
   async list(workspaceId: string, repoId: string): Promise<PrMeta[]> {
     const { repo } = this.deps;

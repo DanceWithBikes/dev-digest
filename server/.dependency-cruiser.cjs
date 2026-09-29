@@ -152,6 +152,46 @@ module.exports = {
       to: { path: '^src/', pathNot: '^src/vendor/shared/' },
     },
 
+    // ── MCP surface: a second presentation adapter, alongside app.ts ────────
+    {
+      name: 'mcp-tools-talk-to-ports',
+      severity: 'error',
+      comment:
+        'Every file under src/mcp/ except compose.ts depends on McpDeps (ports.ts), never the ' +
+        'container, a repository, an adapter or a module directly. platform/errors.ts is the one ' +
+        'platform import allowed — it is the shared AppError taxonomy, not a platform detail.',
+      from: { path: '^src/mcp/', pathNot: '^src/mcp/compose\\.ts$' },
+      to: {
+        path: ['^src/db/', '^src/adapters/', '^src/modules/', '^src/platform/'],
+        pathNot: '^src/platform/errors\\.ts$',
+      },
+    },
+    {
+      name: 'mcp-compose-uses-services-not-repositories',
+      severity: 'error',
+      comment:
+        'src/mcp/compose.ts wires module SERVICES (service.ts, or a module compose.ts factory) into ' +
+        'McpDeps, the same discipline app.ts follows — never a repository.ts directly.',
+      from: { path: '^src/mcp/compose\\.ts$' },
+      to: { path: `${MODULE}repository(\\.ts$|/)` },
+    },
+    {
+      name: 'inner-rings-do-not-know-mcp',
+      severity: 'error',
+      comment:
+        'src/mcp is a presentation adapter, like app.ts — modules, adapters and platform must not ' +
+        'import it back.',
+      from: { path: ['^src/modules/', '^src/adapters/', '^src/platform/'] },
+      to: { path: '^src/mcp/' },
+    },
+    {
+      name: 'mcp-does-not-know-fastify',
+      severity: 'error',
+      comment: 'The MCP server is stdio-only (no HTTP step) — it must run without Fastify.',
+      from: { path: '^src/mcp/' },
+      to: { path: HTTP },
+    },
+
     // ── reviewer-core: the pure engine ──────────────────────────────────────
     {
       name: 'reviewer-core-only-through-its-index',

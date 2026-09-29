@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sum } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql, sum } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type {
@@ -65,6 +65,37 @@ export class PullsRepository {
       .select({ id: t.repos.id, owner: t.repos.owner, name: t.repos.name })
       .from(t.repos)
       .where(eq(t.repos.id, repoId));
+    return row;
+  }
+
+  /**
+   * A repo by "owner/name", case-insensitive, workspace-scoped — the MCP
+   * surface's repo resolver (`modules/pulls/AGENTS.md`). Exact equality on
+   * `lower(full_name)`, NOT `ilike` — `fullName` is caller-supplied (the MCP
+   * `repo` arg) and `ilike` treats `_`/`%` in it as wildcards.
+   */
+  async findRepoByFullName(workspaceId: string, fullName: string): Promise<PullRepoRef | undefined> {
+    const [row] = await this.db
+      .select({ id: t.repos.id, owner: t.repos.owner, name: t.repos.name })
+      .from(t.repos)
+      .where(
+        and(eq(t.repos.workspaceId, workspaceId), eq(sql`lower(${t.repos.fullName})`, fullName.toLowerCase())),
+      );
+    return row;
+  }
+
+  /** A PR by repo + number, workspace-scoped — the MCP surface's PR resolver. */
+  async findPullByNumber(workspaceId: string, repoId: string, number: number): Promise<PullRecord | undefined> {
+    const [row] = await this.db
+      .select(PULL_COLUMNS)
+      .from(t.pullRequests)
+      .where(
+        and(
+          eq(t.pullRequests.workspaceId, workspaceId),
+          eq(t.pullRequests.repoId, repoId),
+          eq(t.pullRequests.number, number),
+        ),
+      );
     return row;
   }
 

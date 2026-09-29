@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, PrIntentRecord, RunEventKind, RunTrace } from '@devdigest/shared';
+import type { FindingActionKind, PrIntentRecord, RunEventKind, RunSummary, RunTrace } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -186,6 +186,24 @@ export class ReviewService {
 
   async getRunTrace(runId: string): Promise<RunTrace | undefined> {
     return this.repo.getRunTrace(runId);
+  }
+
+  /**
+   * A run's status plus the review it produced, workspace-scoped — the MCP
+   * surface's `get_findings` poll target (`src/mcp/tools/get-findings.ts`).
+   * `review` is null while the run is still going, or if it failed before
+   * persisting one; the run's own `status`/`error` is always present, so a
+   * failed run is never mistaken for one that is still running.
+   */
+  async getRunResult(workspaceId: string, runId: string): Promise<{ run: RunSummary; review: ReviewDto | null }> {
+    const run = await this.repo.getRunSummary(workspaceId, runId);
+    if (!run) throw new NotFoundError('Run not found');
+    const found = await this.repo.reviewForRun(workspaceId, runId);
+    if (!found) return { run, review: null };
+    const agentName = found.review.agentId
+      ? ((await this.agents.getById(workspaceId, found.review.agentId))?.name ?? null)
+      : null;
+    return { run, review: reviewToDto(found.review, found.findings, agentName) };
   }
 
   // ===========================================================================

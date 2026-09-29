@@ -24,13 +24,27 @@ import { toJsonSchema, parseWithRepair } from './structured.js';
 
 const NOT_SUPPORTED = 'OpenRouterProvider only implements completeStructured';
 
+/**
+ * Default hard deadline for ONE completion attempt, body included. Generous on
+ * purpose: a legitimate single-pass review on deepseek-v4-flash has taken
+ * ~11 min (15.6k output tokens), so this only ends a truly stalled call.
+ */
+const DEFAULT_DEADLINE_MS = 900_000;
+
 export interface OpenRouterProviderOptions {
   /** OpenAI-compatible base URL (default: OpenRouter). */
   baseURL?: string;
   /** Provider id for traces/gating (default 'openrouter'). */
   id?: 'openai' | 'openrouter';
-  /** Per-request timeout (ms) — the SDK retries on timeout/5xx/429 with backoff. */
+  /** Per-request timeout (ms) — the SDK retries on timeout/5xx/429 with backoff.
+   *  NOTE: the SDK clears this timer once response HEADERS arrive, so it never
+   *  bounds the body read — see `deadlineMs`. */
   timeoutMs?: number;
+  /** Hard deadline (ms) for one completion attempt, INCLUDING the body read.
+   *  OpenRouter answers 200 immediately and then trickles whitespace
+   *  keep-alives while the upstream model works; if the upstream stalls, the
+   *  connection stays open forever and only this deadline ends the call. */
+  deadlineMs?: number;
   maxRetries?: number;
   /** Injected cost estimator; returns USD or null when the model is unknown. */
   estimateCost?: (model: string, tokensIn: number, tokensOut: number) => number | null;
@@ -42,12 +56,14 @@ export class OpenRouterProvider implements LLMProvider {
   private baseURL: string;
   private apiKey: string;
   private estimateCost?: OpenRouterProviderOptions['estimateCost'];
+  private deadlineMs: number;
 
   constructor(apiKey: string, opts: OpenRouterProviderOptions = {}) {
     this.id = opts.id ?? 'openrouter';
     this.apiKey = apiKey;
     this.baseURL = opts.baseURL ?? 'https://openrouter.ai/api/v1';
     this.estimateCost = opts.estimateCost;
+    this.deadlineMs = opts.deadlineMs ?? DEFAULT_DEADLINE_MS;
     this.client = new OpenAI({
       apiKey,
       baseURL: this.baseURL,
@@ -66,7 +82,7 @@ export class OpenRouterProvider implements LLMProvider {
     let lastRaw = '';
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      const res = await this.client.chat.completions.create({
+      const res = await this.createWithDeadline(req.schemaName, {
         model: req.model,
         messages,
         temperature: req.temperature ?? 0,
@@ -113,6 +129,36 @@ export class OpenRouterProvider implements LLMProvider {
       messages.push({ role: 'user', content: parsed.repromptMessage });
     }
     throw new Error(`OpenRouter structured output failed schema validation for ${req.schemaName}`);
+  }
+
+  /**
+   * One chat-completion call bounded by `deadlineMs` end to end. The SDK's own
+   * `timeout` stops counting at the response headers, so a stalled body (see
+   * `deadlineMs`) would otherwise hang the run — and its DB row — forever.
+   */
+  private async createWithDeadline(
+    schemaName: string,
+    body: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+  ): Promise<OpenAI.Chat.ChatCompletion> {
+    try {
+      return await this.client.chat.completions.create(body, {
+        signal: AbortSignal.timeout(this.deadlineMs),
+      });
+    } catch (err) {
+      // Aborted mid-body → fetch's AbortError; aborted before headers → the
+      // SDK's own APIUserAbortError. Both mean the deadline fired.
+      const aborted =
+        err instanceof OpenAI.APIUserAbortError ||
+        (err as Error)?.name === 'AbortError' ||
+        (err as Error)?.name === 'TimeoutError';
+      if (aborted) {
+        throw new Error(
+          `OpenRouter ${schemaName} request exceeded the ${this.deadlineMs / 1000}s deadline ` +
+            '(connection stayed open with no response — upstream model stalled)',
+        );
+      }
+      throw err;
+    }
   }
 
   /**

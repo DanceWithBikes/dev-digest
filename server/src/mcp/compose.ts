@@ -1,9 +1,10 @@
-import type { ReviewRecord } from '@devdigest/shared';
+import type { BlastRadius, ReviewRecord } from '@devdigest/shared';
 import type { Container } from '../platform/container.js';
 import { makeConventionsService } from '../modules/conventions/compose.js';
 import { AgentsService } from '../modules/agents/service.js';
 import { makePullsService } from '../modules/pulls/compose.js';
 import { ReviewService } from '../modules/reviews/service.js';
+import { makeBlastService } from '../modules/blast/compose.js';
 import type { Logger } from './logger.js';
 import type { AgentSelection, McpDeps, PrRef, RepoRef } from './ports.js';
 
@@ -29,6 +30,7 @@ export function buildMcpDeps(container: Container, log: Logger): McpDepsWithLife
   const reviews = new ReviewService(container);
   const agents = new AgentsService(container);
   const conventions = makeConventionsService(container);
+  const blast = makeBlastService(container, log);
   const startedRunIds = new Set<string>();
 
   async function workspaceId(): Promise<string> {
@@ -40,12 +42,21 @@ export function buildMcpDeps(container: Container, log: Logger): McpDepsWithLife
     return pulls.resolveRepo(workspaceId, ref);
   }
 
+  /** Either `pr.prId` directly, or a repo+number lookup — shared by `runAgentOnPr` and `getBlastRadius`. */
+  async function resolvePrId(workspaceId: string, pr: PrRef): Promise<string> {
+    if (pr.kind === 'id') return pr.prId;
+    const repo = await pulls.resolveRepo(workspaceId, { fullName: pr.fullName });
+    const pull = await pulls.resolvePull(workspaceId, repo.id, pr.number);
+    return pull.id;
+  }
+
+  async function getBlastRadius(workspaceId: string, pr: PrRef): Promise<BlastRadius> {
+    const prId = await resolvePrId(workspaceId, pr);
+    return blast.forPull(workspaceId, prId);
+  }
+
   async function runAgentOnPr(workspaceId: string, pr: PrRef, selection: AgentSelection) {
-    const prId =
-      pr.kind === 'id'
-        ? pr.prId
-        : (await pulls.resolvePull(workspaceId, (await pulls.resolveRepo(workspaceId, { fullName: pr.fullName })).id, pr.number))
-            .id;
+    const prId = await resolvePrId(workspaceId, pr);
     const targets = await reviews.resolveTargets(
       workspaceId,
       selection.kind === 'all' ? { all: true } : { agentId: selection.agentId },
@@ -95,6 +106,7 @@ export function buildMcpDeps(container: Container, log: Logger): McpDepsWithLife
     },
     listConventions: (ws, repoId) => conventions.list(ws, repoId),
     previewConventionsSkillBody: async (ws, repoId) => (await conventions.previewBody(ws, repoId)).body,
+    getBlastRadius,
     trackedRunIds: () => [...startedRunIds],
     drain,
   };

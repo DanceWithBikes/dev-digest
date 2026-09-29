@@ -269,12 +269,19 @@ export class RepoIntelService implements RepoIntel {
         continue;
       }
       const callerFiles = new Set<string>();
+      // Cap PER SYMBOL, not globally — a symbol with few callers must not be
+      // starved by another symbol's fan-out (endpoint detection below still
+      // sees every caller FILE; only the emitted caller ROWS are capped).
+      let countForSymbol = 0;
       for (const r of refs) {
         if (r.fromPath === sym.file) continue; // skip the decl's own file
         const callerName = enclosingSymbolName(allSymbols, r.fromPath, r.line);
         const key = `${r.fromPath}|${callerName}|${sym.name}`;
         if (callerSeen.has(key)) continue;
         callerSeen.add(key);
+        callerFiles.add(r.fromPath);
+        if (countForSymbol >= MAX_CALLERS_PER_SYMBOL) continue;
+        countForSymbol += 1;
         callerRows.push({
           file: r.fromPath,
           symbol: callerName,
@@ -282,7 +289,6 @@ export class RepoIntelService implements RepoIntel {
           line: r.line,
           rank: 0, // ripgrep/degraded path has no persistent rank
         });
-        callerFiles.add(r.fromPath);
       }
 
       // Detect HTTP routes reachable from any caller file (best-effort, just
@@ -371,6 +377,17 @@ export class RepoIntelService implements RepoIntel {
     }
     callers.sort((a, b) => b.rank - a.rank);
 
+    // Cap PER SYMBOL (`viaSymbol`), not globally — a global `slice` lets a
+    // high-fan-out symbol starve every other changed symbol's callers.
+    const cappedCallers: BlastCallerRow[] = [];
+    const countPerSymbol = new Map<string, number>();
+    for (const c of callers) {
+      const count = countPerSymbol.get(c.viaSymbol) ?? 0;
+      if (count >= MAX_CALLERS_PER_SYMBOL) continue;
+      countPerSymbol.set(c.viaSymbol, count + 1);
+      cappedCallers.push(c);
+    }
+
     // Precomputed facts per caller file (endpoints + crons), so consumers can
     // attribute them to the changed symbol whose callers live in that file.
     const facts = await this.repo.getFileFacts(repoId, callerFiles);
@@ -383,7 +400,7 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
+      callers: cappedCallers,
       impactedEndpoints: [...endpoints],
       factsByFile,
       degraded: false,

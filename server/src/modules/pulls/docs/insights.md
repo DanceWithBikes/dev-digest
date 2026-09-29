@@ -10,6 +10,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## What Doesn't Work
 
+- **2026-09-28 · `ilike` is not a case-insensitive equality** — Tried: `ilike(t.repos.fullName, fullName)` for the MCP repo lookup, commented as "no wildcards" → Failed because: `_` and `%` in caller input are LIKE wildcards; `_` is common in repo names, so `acme/my_repo` also matched `acme/myXrepo`, and `%/%` matched any repo in the workspace. The `REPO_FULL_NAME_RE` input regex allows both characters. Instead: `eq(sql\`lower(${col})\`, value.toLowerCase())`, pinned by `test/pulls-repository.it.test.ts`.
+  Where: `repository.ts:82` (`findRepoByFullName`), `server/test/pulls-repository.it.test.ts:44`
+
 ## Codebase Patterns
 
 - **2026-09-18 · The list endpoint derives everything from "the latest review", per PR, on read** — `score`, `severity_counts` and `finding_previews` all follow one shape: an `inArray` over the PR ids ordered newest-first, first-seen-per-PR wins, then a JS group. Adding another rollup means extending `latestReviewByPr` (it now carries the review `id` so its findings can be fetched) rather than denormalizing a column. Counts INCLUDE dismissed findings on purpose — the PR page renders dismissed cards (dimmed) and its severity pills count them, so excluding them here would make the two screens disagree.

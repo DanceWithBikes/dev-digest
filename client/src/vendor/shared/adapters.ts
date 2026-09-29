@@ -119,9 +119,28 @@ export interface OpenPrPayload {
   body: string;
 }
 
+/** One commit that touched a path — just enough to chase its associated PRs. */
+export interface CommitRef {
+  sha: string;
+}
+
+/** A PR GitHub associates with a commit (Prior PRs — blast/service.ts). */
+export interface CommitPullRef {
+  number: number;
+  title: string;
+  author: string;
+  /** ISO date, or null when the PR isn't merged (Prior PRs keeps merged-only). */
+  mergedAt: string | null;
+  state: string;
+}
+
 export interface GitHubClient {
   listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
   getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
+  /** Recent commits that touched `path` (newest first), capped at `limit`. */
+  listCommitsForPath(repo: RepoRef, path: string, limit: number): Promise<CommitRef[]>;
+  /** PRs GitHub associates with a commit sha (usually zero or one). */
+  listPullsForCommit(repo: RepoRef, sha: string): Promise<CommitPullRef[]>;
   postReview(repo: RepoRef, n: number, review: GitHubReviewPayload): Promise<{ id: string }>;
   /** List inline review comments on a PR (for the "Files changed" tab). */
   listReviewComments(repo: RepoRef, n: number): Promise<PrReviewComment[]>;

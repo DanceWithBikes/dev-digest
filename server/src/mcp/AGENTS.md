@@ -1,8 +1,8 @@
 # src/mcp — the DevDigest MCP server (stdio)
 
 An MCP server exposing 5 tools to an MCP client (Claude Code / Desktop / Cursor):
-`list_agents`, `run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius`
-(stub). **Stdio transport only** — no HTTP step, no Fastify. Entrypoint: `../mcp.ts`
+`list_agents`, `run_agent_on_pr`, `get_findings`, `get_conventions`, `get_blast_radius`.
+**Stdio transport only** — no HTTP step, no Fastify. Entrypoint: `../mcp.ts`
 (sibling of `server.ts`), started with `pnpm mcp`.
 
 ## Why this isn't `src/modules/mcp/`
@@ -62,12 +62,12 @@ here except `compose.ts` may import `@devdigest/shared` and
   normally — `run.status`/`run.error` carry the failure; `review` is simply
   `null`. Only a genuinely unexpected condition (bad id, missing arguments) is
   `isError`.
-- **`get_blast_radius` always answers `isError: true`.** An empty `BlastRadius`
-  would read as "nothing affected" — a dangerous false negative for a tool that
-  never actually looked. `outputSchema: BlastRadius` is declared now anyway so
-  a later lesson only swaps the handler; the MCP SDK skips output-schema
-  validation on an `isError` result (verified against `@modelcontextprotocol/sdk@1.30.1`'s
-  `validateToolOutput`), so declaring it is safe.
+- **`get_blast_radius` calls `modules/blast/compose.ts#makeBlastService(...).forPull`**
+  — the exact same call `GET /pulls/:id/blast` makes, so a Claude Code answer
+  and the studio card's payload are identical by construction. A DEGRADED
+  result (index missing/partial) is returned normally, with its `reason`, not
+  as `isError` — an empty map here means "the index can't answer yet", never
+  "nothing is affected". Only an unresolvable PR reference is `isError`.
 - **This process never calls `reapStaleRuns`.** `app.ts` does, on HTTP boot,
   because a fresh API process owns no in-flight runs yet. An MCP session shares
   the same Postgres as a possibly-running API instance; reaping here would mark

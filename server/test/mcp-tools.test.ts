@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { Agent, ConventionCandidate, ReviewRecord, RunSummary } from '@devdigest/shared';
+import type { Agent, BlastRadius, ConventionCandidate, ReviewRecord, RunSummary } from '@devdigest/shared';
 import { NotFoundError } from '../src/platform/errors.js';
 import type { McpDeps } from '../src/mcp/ports.js';
 import { createDevDigestMcpServer } from '../src/mcp/server.js';
@@ -25,6 +25,7 @@ const RUN_ID = '44444444-4444-4444-a444-444444444444';
 const MISSING_RUN_ID = '77777777-7777-4777-a777-777777777777';
 const REPO_ID = '55555555-5555-4555-a555-555555555555';
 const REVIEW_ID = '66666666-6666-4666-a666-666666666666';
+const MISSING_PR_ID = '88888888-8888-4888-a888-888888888888';
 
 const enabledAgent: Agent = {
   id: AGENT_A_ID,
@@ -156,6 +157,27 @@ const conventions: ConventionCandidate[] = [
   },
 ];
 
+const blastRadius: BlastRadius = {
+  changed_symbols: [{ name: 'rateLimit', file: 'src/middleware/ratelimit.ts', kind: 'function' }],
+  downstream: [
+    {
+      symbol: 'rateLimit',
+      callers: [
+        {
+          name: 'publicRouter',
+          file: 'src/api/public/index.ts',
+          line: 23,
+          endpoints: ['GET /api/public/items'],
+          crons: [],
+        },
+      ],
+      endpoints_affected: ['GET /api/public/items'],
+      crons_affected: [],
+    },
+  ],
+  summary: '1 symbols · 1 callers · 1 endpoints · 0 crons',
+};
+
 function fakeDeps(): McpDeps {
   return {
     async workspaceId() {
@@ -195,6 +217,14 @@ function fakeDeps(): McpDeps {
       expect(workspaceId).toBe(WS);
       expect(repoId).toBe(REPO_ID);
       return '### repo-conventions\n- Use kebab-case for file names';
+    },
+    async getBlastRadius(workspaceId, pr) {
+      expect(workspaceId).toBe(WS);
+      if (pr.kind === 'id' && pr.prId !== PR_ID) throw new NotFoundError('PR not found');
+      if (pr.kind === 'repo' && !(pr.fullName.toLowerCase() === 'acme/widgets' && pr.number === 42)) {
+        throw new NotFoundError('PR not found');
+      }
+      return blastRadius;
     },
   };
 }
@@ -382,12 +412,25 @@ describe('devdigest MCP server', () => {
   });
 
   describe('get_blast_radius', () => {
-    it('always isError, regardless of input', async () => {
+    it('returns structuredContent matching the payload the route would return', async () => {
       const result = await client.callTool({ name: 'get_blast_radius', arguments: { pr_id: PR_ID } });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toEqual(blastRadius);
+    });
+
+    it('isError with a not-found hint for an unknown PR', async () => {
+      const result = await client.callTool({ name: 'get_blast_radius', arguments: { pr_id: MISSING_PR_ID } });
       expect(result.isError).toBe(true);
-      expect(result.structuredContent).toBeUndefined();
       const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
-      expect(text.toLowerCase()).toContain('not implemented');
+      expect(text).toContain('workspace');
+    });
+
+    it('isError when pr_id is given together with repo + number', async () => {
+      const result = await client.callTool({
+        name: 'get_blast_radius',
+        arguments: { pr_id: PR_ID, repo: 'acme/widgets', number: 42 },
+      });
+      expect(result.isError).toBe(true);
     });
   });
 });

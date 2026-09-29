@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, sum } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql, sum } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type {
@@ -70,14 +70,17 @@ export class PullsRepository {
 
   /**
    * A repo by "owner/name", case-insensitive, workspace-scoped — the MCP
-   * surface's repo resolver (`modules/pulls/AGENTS.md`). `ilike` with no `%`
-   * wildcards in `fullName` is a plain case-insensitive equality check.
+   * surface's repo resolver (`modules/pulls/AGENTS.md`). Exact equality on
+   * `lower(full_name)`, NOT `ilike` — `fullName` is caller-supplied (the MCP
+   * `repo` arg) and `ilike` treats `_`/`%` in it as wildcards.
    */
   async findRepoByFullName(workspaceId: string, fullName: string): Promise<PullRepoRef | undefined> {
     const [row] = await this.db
       .select({ id: t.repos.id, owner: t.repos.owner, name: t.repos.name })
       .from(t.repos)
-      .where(and(eq(t.repos.workspaceId, workspaceId), ilike(t.repos.fullName, fullName)));
+      .where(
+        and(eq(t.repos.workspaceId, workspaceId), eq(sql`lower(${t.repos.fullName})`, fullName.toLowerCase())),
+      );
     return row;
   }
 

@@ -1,0 +1,14 @@
+{
+  "name": "PR detail Overview tab renders the Blast Radius card, degraded (no repo-intel index in the seed)",
+  "description": "From PR #482, land on the Overview tab (the default — no tab click needed) and confirm the Blast Radius card renders: its title (SectionLabel uppercases it via CSS text-transform, so the assertion matches the rendered 'BLAST RADIUS', not the source 'Blast Radius' — see client/docs/insights.md) and the degraded notice's reason text. The seed repo has no repo-intel index at all (server/docs/insights.md), so `GET /pulls/482/blast` comes back `degraded: true, reason: 'no_data'` and the card shows reason.no_data instead of a tree/graph — read-only seeded data, no model call. Prior PRs is deliberately left closed: opening it would fire a live GitHub call. Entry steps copied from specs/08-smart-diff.flow.json; the PR-row click keeps --exact for the same reason as that flow (Next.js inlines the full next-intl messages blob into a <script> tag that a non-exact `find text` can resolve to instead of the real row).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click", "--exact"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["scroll", "down", "700", "--selector", "main"], "label": "scroll the Blast Radius card into view (it scrolls inside main, not window)" },
+    { "cmd": ["wait", "--text", "BLAST RADIUS"], "label": "the Blast Radius card renders (SectionLabel's uppercase title)" },
+    { "cmd": ["wait", "--text", "No code index yet"], "label": "degraded reason.no_data renders (the seed has no repo-intel index)" }
+  ]
+}

@@ -27,12 +27,15 @@ export interface RepoIntelState {
     While `poll` is true, refetch on an interval so a running resync's result
     becomes visible. The caller (ProjectContextView) owns when to stop polling
     (the status enum is terminal-only, so completion is detected by watching
-    `lastIndexedSha`/`updatedAt` advance, not by status). */
-export function useRepoIntelStatus(repoId: string | null | undefined, poll = false) {
+    `lastIndexedSha`/`updatedAt` advance, not by status).
+    `enabled` lets a caller that only sometimes needs this (e.g. `useBlastResync`,
+    which only cares while the Blast Radius map is degraded) skip the fetch
+    entirely rather than always pulling index-state "just in case". */
+export function useRepoIntelStatus(repoId: string | null | undefined, poll = false, enabled = true) {
   return useQuery({
     queryKey: ["repo-intel-state", repoId],
     queryFn: () => api.get<RepoIntelState>(`/repos/${repoId}/index-state`),
-    enabled: !!repoId,
+    enabled: !!repoId && enabled,
     refetchInterval: poll ? 1500 : false,
   });
 }

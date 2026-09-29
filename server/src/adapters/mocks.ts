@@ -17,6 +17,8 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  CommitRef,
+  CommitPullRef,
   GitClient,
   CloneOptions,
   UnifiedDiff,
@@ -125,6 +127,10 @@ export interface MockGitHubOptions {
   login?: string;
   /** Existing inline review comments returned by listReviewComments. */
   comments?: PrReviewComment[];
+  /** `listCommitsForPath` fixture, keyed by path. Defaults to `[]` for any path. */
+  commitsByPath?: Record<string, CommitRef[]>;
+  /** `listPullsForCommit` fixture, keyed by sha. Defaults to `[]` for any sha. */
+  pullsByCommit?: Record<string, CommitPullRef[]>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -183,6 +189,14 @@ export class MockGitHubClient implements GitHubClient {
       linked_issue: null,
     };
     return { ...base, ...this.opts.detail };
+  }
+
+  async listCommitsForPath(_repo: RepoRef, path: string, limit: number): Promise<CommitRef[]> {
+    return (this.opts.commitsByPath?.[path] ?? []).slice(0, limit);
+  }
+
+  async listPullsForCommit(_repo: RepoRef, sha: string): Promise<CommitPullRef[]> {
+    return this.opts.pullsByCommit?.[sha] ?? [];
   }
 
   async postReview(_repo: RepoRef, n: number, review: GitHubReviewPayload): Promise<{ id: string }> {

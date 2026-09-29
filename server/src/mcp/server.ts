@@ -18,7 +18,7 @@ export function createDevDigestMcpServer(deps: McpDeps): McpServer {
   registerRunAgentOnPr(server, deps);
   registerGetFindings(server, deps);
   registerGetConventions(server, deps);
-  registerGetBlastRadius(server);
+  registerGetBlastRadius(server, deps);
 
   return server;
 }

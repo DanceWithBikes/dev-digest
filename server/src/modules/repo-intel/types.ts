@@ -22,14 +22,11 @@
  * while still guaranteeing every consumer can fall back without throwing.
  */
 
+import type { BlastDegradedReason } from '@devdigest/shared';
+
 export type IndexStatus = 'full' | 'partial' | 'degraded' | 'failed';
 
-export type DegradedReason =
-  | 'flag_off'
-  | 'index_failed'
-  | 'index_partial'
-  | 'repo_too_large'
-  | 'no_data';
+export type DegradedReason = BlastDegradedReason;
 
 export interface IndexResult {
   status: IndexStatus;
@@ -50,8 +47,10 @@ export interface IndexState extends IndexResult {
 }
 
 // ---------------------------------------------------------------------------
-// Blast radius (facade method `getBlastRadius`). Adopted by blast/service.ts in
-// T2; in T1 the facade returns a degraded best-effort over container.codeIndex.
+// Blast radius (facade method `getBlastRadius`). Consumed by modules/blast via
+// the structural `BlastRadiusReader` port (blast/ports.ts) — `blast/` may not
+// import this file directly, so `BlastFacadeResult` there is a structural copy
+// of `BlastResult` below.
 // ---------------------------------------------------------------------------
 
 export interface BlastChangedSymbol {

@@ -6,6 +6,12 @@ export const s = {
     gridTemplateColumns: "1fr 1fr",
     gap: 18,
   } satisfies CSSProperties,
+  /** A brief-grid card that spans the full row (BlastRadiusCard — its Tree/Graph
+      content wants more width than a half-column). */
+  briefFull: {
+    gridColumn: "1 / -1",
+    marginTop: 18,
+  } satisfies CSSProperties,
   descriptionBox: {
     border: "1px solid var(--border)",
     borderRadius: 8,

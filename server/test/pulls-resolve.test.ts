@@ -2,8 +2,8 @@
  * `PullsService.resolveRepo` / `resolvePull` — the MCP surface's local-DB-only
  * repo/PR resolver (`src/mcp/AGENTS.md`). Pure service test: a stub repo, no
  * Postgres. The repository-level case-insensitive match itself is exercised
- * indirectly here (the stub simulates it); the real SQL (`ilike`) needs the
- * integration suite.
+ * indirectly here (the stub simulates it); the real SQL (exact equality on
+ * `lower(full_name)`, not `ilike`) is covered by `pulls-repository.it.test.ts`.
  */
 import { describe, it, expect } from 'vitest';
 import { PullsService, type PullsDeps } from '../src/modules/pulls/service.js';

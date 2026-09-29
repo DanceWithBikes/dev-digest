@@ -9,8 +9,12 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Codebase Patterns
 
+- **2026-09-28 · `MAX_CALLERS_PER_SYMBOL` is now enforced per `viaSymbol`; `BFS_DEPTH` is not used by blast at all** — Until 2026-09-28 the persistent blast path applied the cap as one global `callers.slice(0, 20)` over the rank-sorted list, so one high-fan-out symbol could starve every other changed symbol (25 callers of A + 3 of B → 20 A, 0 B), and the ripgrep fallback had no cap. Both paths now count per symbol (pinned by `test/repo-intel-blast-cap.test.ts`). Blast looks exactly one hop (direct references); `BFS_DEPTH` only drives `getCriticalPaths` — don't expect it to widen the blast map.
+  Where: `service.ts:383` (`countPerSymbol`, persistent path), `service.ts:275` (`countForSymbol`, ripgrep path), `service.ts:703` (the only `BFS_DEPTH` loop), `constants.ts:30` (`MAX_CALLERS_PER_SYMBOL`)
+
 - **2026-09-28 · The `blast/service.ts` comment is a forward-reference to a module that doesn't exist yet — don't go looking for it** — `types.ts`'s Blast radius section says `getBlastRadius` is "Adopted by blast/service.ts in T2"; there is no `server/src/modules/blast/` anywhere in the repo (`find server/src/modules -iname '*blast*'` → nothing). The comment describes a planned FUTURE module, written before it existed and never updated once the stub landed elsewhere: the MCP surface's `get_blast_radius` tool (L04, `server/src/mcp/tools/get-blast-radius.ts`) is the current placeholder for this facade method, and it does not call `getBlastRadius` at all yet — it always returns `isError`. When a real `blast` (or similarly-named) module is finally built, it is the one that should call `container.repoIntel.getBlastRadius`, and this comment should be updated to point at it instead of describing it prospectively.
   Where: `types.ts:53` (`// Blast radius (facade method \`getBlastRadius\`). Adopted by blast/service.ts in T2...`), `types.ts:147` (`getBlastRadius` signature), `../../mcp/tools/get-blast-radius.ts:1` (the current placeholder, unrelated to this facade method today)
+  **Correction (2026-09-28):** superseded — `server/src/modules/blast/` now exists and calls `getBlastRadius` through its structural `BlastRadiusReader` port; the `types.ts` comment was updated to say so, and MCP `get_blast_radius` calls the same `BlastService.forPull`. Where: `types.ts:51` (updated comment), `../../mcp/compose.ts:53` (`getBlastRadius`)
 
 ## Tool & Library Notes
 

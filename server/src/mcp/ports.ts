@@ -1,5 +1,6 @@
 import type {
   Agent,
+  BlastRadius,
   ConventionCandidate,
   ReviewRecord,
   ReviewRunTarget,
@@ -60,4 +61,7 @@ export interface McpDeps {
 
   /** The skill body the accepted candidates would assemble right now. */
   previewConventionsSkillBody(workspaceId: string, repoId: string): Promise<string>;
+
+  /** Same payload `GET /pulls/:id/blast` returns — read-only, index-only, no model call. */
+  getBlastRadius(workspaceId: string, pr: PrRef): Promise<BlastRadius>;
 }

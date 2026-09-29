@@ -32,6 +32,29 @@ describe('mock adapters (no network)', () => {
     expect(url).toContain('github.com');
   });
 
+  it('MockGitHubClient.listCommitsForPath returns the fixture, capped at limit; unknown path is empty', async () => {
+    const gh = new MockGitHubClient({
+      commitsByPath: { 'src/shared.ts': [{ sha: 'a1' }, { sha: 'a2' }, { sha: 'a3' }] },
+    });
+    const capped = await gh.listCommitsForPath({ owner: 'a', name: 'b' }, 'src/shared.ts', 2);
+    expect(capped).toEqual([{ sha: 'a1' }, { sha: 'a2' }]);
+    const unknown = await gh.listCommitsForPath({ owner: 'a', name: 'b' }, 'src/other.ts', 10);
+    expect(unknown).toEqual([]);
+  });
+
+  it('MockGitHubClient.listPullsForCommit returns the fixture by sha; unknown sha is empty', async () => {
+    const pull = {
+      number: 7,
+      title: 'Fix rate limiting',
+      author: 'marisa.koch',
+      mergedAt: '2024-01-01T00:00:00Z',
+      state: 'closed',
+    };
+    const gh = new MockGitHubClient({ pullsByCommit: { a1: [pull] } });
+    expect(await gh.listPullsForCommit({ owner: 'a', name: 'b' }, 'a1')).toEqual([pull]);
+    expect(await gh.listPullsForCommit({ owner: 'a', name: 'b' }, 'unknown')).toEqual([]);
+  });
+
   it('MockCodeIndex + MockEmbedder return deterministic shapes', async () => {
     const ci = new MockCodeIndex();
     expect((await ci.symbols({ owner: 'a', name: 'b' }))[0]!.name).toBe('rateLimit');

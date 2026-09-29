@@ -36,7 +36,7 @@ before this lesson nothing MCP-related existed in the repo.
 | `run_agent_on_pr` | starts a background run | not read-only, not idempotent, `openWorldHint` (spends LLM budget) |
 | `get_findings` | read-only | doubles as the poll target for `run_agent_on_pr`; a failed/cancelled run is returned normally, never as a tool error |
 | `get_conventions` | read-only | a repo's house rules, filterable by status |
-| `get_blast_radius` | read-only, **stub** | always `isError: true` — real impl is a later lesson |
+| `get_blast_radius` | read-only | which callers, HTTP endpoints and crons a PR's changed symbols can affect — calls `modules/blast/compose.ts#makeBlastService(...).forPull`, the same call `GET /pulls/:id/blast` makes; a degraded result is returned normally, not as an error (implemented in L04, see [`docs/specs/blast-radius.md`](blast-radius.md)) |
 
 ## Data / call flow
 
@@ -63,15 +63,26 @@ sequenceDiagram
     Note over Client: stop once run.status is "done" / "failed" / "cancelled"
 ```
 
-## Why `get_blast_radius` is a stub that errors, not one that returns empty
+## `get_blast_radius`: why it was a stub, and how the real implementation landed
 
 An empty `BlastRadius` (`changed_symbols: [], downstream: [], summary: ""`)
 reads as "nothing is affected" — a dangerous false negative for a caller
-deciding how carefully to review a change. `isError: true` with an explicit
-"not implemented, do not read this as no impact" message can't be
-misinterpreted that way. The final output schema (`BlastRadius`,
-`contracts/brief.ts`) is declared now so the later lesson that implements it
-for real only has to swap the handler, not the tool's contract.
+deciding how carefully to review a change. The L04 stub therefore answered
+`isError: true` with an explicit "not implemented, do not read this as no
+impact" message rather than an empty result, while declaring the final output
+schema (`BlastRadius`, `contracts/brief.ts`) up front so a later lesson could
+swap only the handler, not the tool's contract.
+
+That later lesson is this one: `get_blast_radius` now calls
+`modules/blast/compose.ts#makeBlastService(...).forPull` — the exact call
+`GET /pulls/:id/blast` makes — so a Claude Code answer and the studio card's
+payload are identical by construction. The same false-negative concern now
+resolves differently: a DEGRADED result (index missing/partial) is returned
+NORMALLY, with its `reason`, not as `isError` — an empty map here means "the
+index can't answer yet", never "nothing is affected". Only an unresolvable PR
+reference is `isError`. The `files` input declared in the stub was removed —
+it was never read by any handler (D8). Full detail:
+[`docs/specs/blast-radius.md`](blast-radius.md).
 
 ## Acceptance criteria
 
@@ -80,7 +91,7 @@ for real only has to swap the handler, not the tool's contract.
 - [x] `run_agent_on_pr` requires `agent_id` XOR `all:true`, and `pr_id` XOR `repo`+`number` — either combination missing or doubled is `isError` with an actionable message — `server/src/mcp/helpers.ts:17` (`parsePrRef`), `:34` (`parseAgentSelection`) · test: `server/test/mcp-helpers.test.ts`, `server/test/mcp-tools.test.ts` (`describe('run_agent_on_pr')`)
 - [x] `get_findings` is the poll target: workspace-scoped end to end, and a failed/cancelled run is returned normally (never `isError`) — `server/src/modules/reviews/service.ts:198` (`getRunResult`) · test: `server/test/mcp.it.test.ts` (poll-to-done, and the cross-workspace `isError` case)
 - [x] `get_conventions` filters by status (default `accepted`) while `counts` always covers every status — `server/src/mcp/helpers.ts:71` (`filterByStatus`), `:80` (`countByStatus`) · test: `server/test/mcp.it.test.ts` ("get_conventions filters by status...")
-- [x] `get_blast_radius` always answers `isError: true`, declaring `outputSchema: BlastRadius` for a later lesson to fill in — `server/src/mcp/tools/get-blast-radius.ts:16` · test: `server/test/mcp-tools.test.ts` ("always isError, regardless of input")
+- [x] `get_blast_radius` calls `modules/blast/compose.ts#makeBlastService(...).forPull`, returning the same `BlastRadius` payload `GET /pulls/:id/blast` returns as `structuredContent`; a degraded result is returned normally (not `isError`), and the stub-era `files` input was removed (D8) — `server/src/mcp/tools/get-blast-radius.ts:19` · test: `server/test/mcp-tools.test.ts` (`describe('get_blast_radius')`, 3 cases) · full detail: [`docs/specs/blast-radius.md`](blast-radius.md)
 - [x] `.mcp.json` registers the server as `stdio`, running `pnpm --silent --dir server mcp` from the repo root (`--silent` keeps pnpm's own banner off stdout; no secrets in the config — the server reads `~/.devdigest/secrets.json` itself) — `.mcp.json:1`
 - [x] 4 `pnpm arch:check` rules keep this a thin presentation adapter, same discipline as `app.ts` for HTTP — `server/.dependency-cruiser.cjs` (search `mcp-`) · verified: `pnpm arch:check` — 0 new violations
 - [ ] An actual Claude Code session has exercised `.mcp.json` end to end (`/mcp` panel shows `devdigest` with 5 tools; a real `run_agent_on_pr` → `get_findings` round trip from the client) — needs a Claude Code restart outside this session's reach; the server side is proven by `server/test/mcp.it.test.ts` and the manual JSON-RPC smoke test instead
@@ -111,9 +122,10 @@ for real only has to swap the handler, not the tool's contract.
 | Tools, ports, compose, entrypoint | `server/src/mcp/`, `server/src/mcp.ts` | [`server/src/mcp/docs/specs/devdigest-mcp.md`](../../server/src/mcp/docs/specs/devdigest-mcp.md) |
 | PR/repo resolver | `server/src/modules/pulls/` | [`server/src/modules/pulls/docs/specs/devdigest-mcp.md`](../../server/src/modules/pulls/docs/specs/devdigest-mcp.md) |
 | Workspace-scoped run result | `server/src/modules/reviews/` | [`server/src/modules/reviews/docs/specs/devdigest-mcp.md`](../../server/src/modules/reviews/docs/specs/devdigest-mcp.md) |
+| `get_blast_radius`'s real implementation (L04) | `server/src/modules/blast/` | [`docs/specs/blast-radius.md`](blast-radius.md) |
 | Client registration | `.mcp.json` | — (no code, config only) |
 
 ## Open questions
 
 - **No live MCP client has exercised this yet.** See the last (unchecked) acceptance criterion above — everything is proven from the server side (integration test + manual JSON-RPC smoke test), nothing from an actual `claude mcp` session.
-- **`get_blast_radius` has no real implementation yet, by design** — the later lesson that adds it swaps only `server/src/mcp/tools/get-blast-radius.ts`'s handler body; the tool's name, input schema and output schema are meant to stay stable.
+- **`get_blast_radius` is now implemented** (see the acceptance criterion above and [`docs/specs/blast-radius.md`](blast-radius.md)); no test drives it through a DEGRADED (not-`isError`) result specifically — see that spec's Open questions.

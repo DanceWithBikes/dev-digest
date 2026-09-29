@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Finding, Verdict } from './findings.js';
-import { Intent, SmartDiff } from './brief.js';
+import { BlastRadius, Intent, PrHistory, SmartDiff } from './brief.js';
 
 /**
  * A2 — Review-Core API surface contracts. These extend the core
@@ -97,3 +97,11 @@ export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 /** Smart-diff response for a PR (the SmartDiff). */
 export const SmartDiffResponse = SmartDiff;
 export type SmartDiffResponse = z.infer<typeof SmartDiffResponse>;
+
+/** Blast-radius response for a PR (the BlastRadius) — `GET /pulls/:id/blast`. */
+export const BlastRadiusResponse = BlastRadius;
+export type BlastRadiusResponse = z.infer<typeof BlastRadiusResponse>;
+
+/** Prior-PRs response for a PR (the PrHistory) — `GET /pulls/:id/prior-prs`. */
+export const PrHistoryResponse = PrHistory;
+export type PrHistoryResponse = z.infer<typeof PrHistoryResponse>;

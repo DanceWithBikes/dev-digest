@@ -1,4 +1,7 @@
 {
+  "title": "Blast Radius",
+  "loading": "Loading blast radius…",
+  "error": "Couldn't load the blast radius.",
   "stat": {
     "symbols": "symbols",
     "callers": "callers",
@@ -9,10 +12,42 @@
     "tree": "tree",
     "graph": "graph"
   },
+  "toggleLabel": "Blast radius view",
   "callerCount": "{count} callers",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "noCallers": "No downstream callers.",
+  "openInGithub": "Open {file} at line {line} on GitHub",
+  "chip": {
+    "endpoint": "Endpoint: {endpoint}",
+    "cron": "Cron: {cron}"
+  },
   "graph": {
     "empty": "No downstream callers to graph.",
     "ariaLabel": "Blast radius graph"
+  },
+  "legend": {
+    "changed": "changed symbol",
+    "callers": "callers",
+    "endpoints": "endpoints affected"
+  },
+  "reason": {
+    "flag_off": "Blast radius is turned off for this repo.",
+    "index_failed": "The code index failed to build — this map may be incomplete.",
+    "index_partial": "The code index is only partially built — some callers may be missing.",
+    "repo_too_large": "This repo is too large to fully index — this map may be incomplete.",
+    "no_data": "No code index yet — resync to build the blast radius map."
+  },
+  "degradedBadge": "Incomplete",
+  "resync": {
+    "button": "Resync",
+    "running": "Resyncing…",
+    "timeout": "Resync is taking longer than expected — check back soon.",
+    "failed": "Resync failed — try again."
+  },
+  "priorPrs": {
+    "title": "Prior PRs touching these files",
+    "empty": "No prior PRs touched these files.",
+    "error": "Couldn't load prior PRs.",
+    "mergedBy": "merged by {author}"
   }
 }

@@ -132,18 +132,14 @@ export const GetConventionsOutput = z.object({
 });
 export type GetConventionsOutput = z.infer<typeof GetConventionsOutput>;
 
-// ---- get_blast_radius (stub) ----------------------------------------------------
+// ---- get_blast_radius -------------------------------------------------------
 
 export const GetBlastRadiusInput = {
+  /** Identify the PR either by its studio id, or by repo + number — not both. */
   pr_id: z.string().uuid().optional(),
   repo: repoFullName().optional(),
   number: z.number().int().positive().optional(),
-  files: z.array(z.string()).optional(),
 };
 
-/**
- * The final output shape, declared now so a later lesson only swaps the
- * handler — never actually returned today (the handler always answers
- * `isError: true`, which the SDK skips output-schema validation for).
- */
+/** The same `BlastRadius` `GET /pulls/:id/blast` returns. */
 export const GetBlastRadiusOutput = BlastRadius;

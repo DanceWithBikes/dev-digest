@@ -1,40 +1,48 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { toToolError } from '../errors.js';
+import { parsePrRef } from '../helpers.js';
+import type { McpDeps } from '../ports.js';
 import { GetBlastRadiusInput, GetBlastRadiusOutput } from '../schemas.js';
 
 /**
- * `get_blast_radius` — STUB. The final input/output shapes are declared now
- * (`BlastRadius`, `contracts/brief.ts`) so a later lesson only swaps this
- * handler for the real `container.repoIntel.getBlastRadius` implementation.
- *
- * Always answers `isError: true`, never an empty `BlastRadius` — an empty
- * result reads as "nothing affected", a dangerous false negative for a tool
- * that has not actually looked. The SDK skips output-schema validation on an
- * `isError` result, so declaring `outputSchema` here is safe even though the
- * handler never produces `structuredContent`.
+ * `get_blast_radius` — which symbols a PR's changed files declare, which
+ * callers reach them, and which HTTP endpoints/crons that can affect. Call
+ * this BEFORE reviewing or approving a PR to learn what else the change can
+ * touch. Read-only: it only reads the precomputed repo-intel index (never
+ * re-parses the repo, never calls a model) — the SAME data
+ * `GET /pulls/:id/blast` and the studio's Blast Radius card render, so a
+ * `structuredContent` here matches the card exactly. A degraded result (index
+ * missing or partial) is returned normally, with its `reason`, not as an
+ * error — an empty map here means "the index can't answer yet", never
+ * "nothing is affected".
  */
-export function registerGetBlastRadius(server: McpServer): void {
+export function registerGetBlastRadius(server: McpServer, deps: McpDeps): void {
   server.registerTool(
     'get_blast_radius',
     {
-      title: 'Get blast radius (not implemented)',
+      title: 'Get blast radius',
       description:
-        'Reserved for a future impact-analysis feature (which symbols a PR changes, and what calls them). ' +
-        'NOT implemented yet — always returns an error. Do not call this expecting a real answer, and never ' +
-        'read the absence of a result as "no impact".',
+        "Read a PR's blast radius: which symbols its changed files declare, which callers reach them, " +
+        'and which HTTP endpoints/crons that can affect. Call this before reviewing or approving a PR. ' +
+        'Identify the PR with pr_id, or with repo ("owner/name") + number — exactly one of the two. ' +
+        'Read-only: reads the precomputed repo-intel index, never re-parses the repo and never calls a ' +
+        'model. A degraded result (index missing or partial) is returned with its reason, not as an error.',
       inputSchema: GetBlastRadiusInput,
       outputSchema: GetBlastRadiusOutput,
-      annotations: { title: 'Get blast radius (not implemented)', readOnlyHint: true, idempotentHint: true },
+      annotations: { title: 'Get blast radius', readOnlyHint: true, idempotentHint: true },
     },
-    async () => ({
-      content: [
-        {
-          type: 'text',
-          text:
-            'get_blast_radius is not implemented yet — no impact analysis was performed. ' +
-            'Do not read this as "no impact"; it means the question was never answered.',
-        },
-      ],
-      isError: true,
-    }),
+    async (args) => {
+      try {
+        const workspaceId = await deps.workspaceId();
+        const pr = parsePrRef(args);
+        const structured = await deps.getBlastRadius(workspaceId, pr);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }],
+          structuredContent: structured,
+        };
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
   );
 }

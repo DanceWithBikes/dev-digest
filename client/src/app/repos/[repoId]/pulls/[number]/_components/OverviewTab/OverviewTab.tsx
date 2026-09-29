@@ -22,21 +22,21 @@ export function OverviewTab({ prBody, prId, headSha, repoId, repoFullName }: Ove
   const t = useTranslations("prReview");
   return (
     <>
-      {/* PR Brief grid — IntentCard + BlastRadiusCard today; L05 PR Brief
-          drops in beside them later. */}
+      {/* Intent and Blast Radius are separate sections under a hairline, so the
+          two cards never read as one block; each card carries its own title. */}
       <section>
-        <SectionLabel icon="Layers">{t("overview.prBrief")}</SectionLabel>
-        <div style={s.briefGrid}>
-          <IntentCard prId={prId} headSha={headSha} />
-          <div style={s.briefFull}>
-            <BlastRadiusCard prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={headSha} />
-          </div>
-        </div>
+        <IntentCard prId={prId} headSha={headSha} />
+      </section>
+
+      <hr style={s.sectionDivider} />
+
+      <section>
+        <BlastRadiusCard prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={headSha} />
       </section>
 
       {prBody && (
         <section>
-          <SectionLabel icon="MessageSquare">Description</SectionLabel>
+          <SectionLabel icon="MessageSquare">{t("overview.description")}</SectionLabel>
           <div style={s.descriptionBox}>{prBody}</div>
         </section>
       )}

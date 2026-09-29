@@ -79,6 +79,12 @@
     "generateSummaries": "Generate summaries",
     "generatingSummaries": "Generating…"
   },
+  "diffTab": {
+    "title": "Files changed · {count, plural, one {# file} other {# files}}",
+    "showComments": "Show comments ({count})",
+    "hideComments": "Hide comments ({count})",
+    "summariesError": "Couldn't generate summaries."
+  },
   "list": {
     "breadcrumb": "Pull Requests",
     "title": "Pull Requests",
@@ -128,7 +134,8 @@
     "deleteRun": "Delete run"
   },
   "overview": {
-    "prBrief": "PR Brief"
+    "prBrief": "PR Brief",
+    "description": "Description"
   },
   "intent": {
     "title": "Intent",

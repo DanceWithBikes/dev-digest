@@ -13,6 +13,8 @@
     "graph": "graph"
   },
   "toggleLabel": "Blast radius view",
+  "showAll": "Show all",
+  "showLess": "Show less",
   "callerCount": "{count} callers",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
   "noCallers": "No downstream callers.",

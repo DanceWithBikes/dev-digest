@@ -6,9 +6,13 @@ export const s = {
     position: "relative",
     width,
     height,
-    minWidth: "100%",
-    overflowX: "auto",
+    // Centred in the card; a canvas wider than the card scrolls in `scroller`.
+    margin: "0 auto",
   }),
+  scroller: {
+    width: "100%",
+    overflowX: "auto",
+  } satisfies CSSProperties,
   svg: {
     position: "absolute",
     top: 0,
@@ -46,10 +50,11 @@ export const s = {
   legend: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 18,
-    marginTop: 16,
-    paddingTop: 14,
-    borderTop: "1px solid var(--border)",
+    marginBottom: 16,
+    paddingBottom: 14,
+    borderBottom: "1px solid var(--border)",
   } satisfies CSSProperties,
   legendItem: {
     display: "inline-flex",

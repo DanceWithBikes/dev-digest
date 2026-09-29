@@ -140,7 +140,7 @@ export function DiffTab({ prId, filesCount, files, canComment, repoFullName, hea
                 onClick={() =>
                   generateSummaries.mutate(undefined, {
                     onError: (err) =>
-                      notify.error(err instanceof Error ? err.message : "Couldn't generate summaries."),
+                      notify.error(err instanceof Error ? err.message : t("diffTab.summariesError")),
                   })
                 }
               >
@@ -156,13 +156,13 @@ export function DiffTab({ prId, filesCount, files, canComment, repoFullName, hea
                 icon={showComments ? "EyeOff" : "Eye"}
                 onClick={() => setShowComments((v) => !v)}
               >
-                {showComments ? "Hide comments" : "Show comments"} ({commentCount})
+                {t(showComments ? "diffTab.hideComments" : "diffTab.showComments", { count: commentCount })}
               </Button>
             )}
           </div>
         }
       >
-        Files changed · {filesCount} files
+        {t("diffTab.title", { count: filesCount })}
       </SectionLabel>
 
       {useSmartOrder && smartDiff ? (

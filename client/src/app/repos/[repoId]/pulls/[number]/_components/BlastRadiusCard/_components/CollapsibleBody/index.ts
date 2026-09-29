@@ -1,0 +1,1 @@
+export { CollapsibleBody } from "./CollapsibleBody";

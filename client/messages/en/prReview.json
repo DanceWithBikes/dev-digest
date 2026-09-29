@@ -53,11 +53,13 @@
   },
   "runStatus": {
     "elapsed": "Running · {count} agent(s)",
+    "elapsedQueued": "Running · {running} agent(s) · {queued} queued",
     "approved": "approved",
     "reviewed": "reviewed",
     "rejected": "rejected",
     "error": "error",
     "cancelled": "cancelled",
+    "queued": "queued",
     "running": "running",
     "findings": "{count} finding(s)",
     "blockers": " · {count} blockers"
@@ -78,6 +80,12 @@
     "filesWithFindings": "{count} files with findings",
     "generateSummaries": "Generate summaries",
     "generatingSummaries": "Generating…"
+  },
+  "diffTab": {
+    "title": "Files changed · {count, plural, one {# file} other {# files}}",
+    "showComments": "Show comments ({count})",
+    "hideComments": "Hide comments ({count})",
+    "summariesError": "Couldn't generate summaries."
   },
   "list": {
     "breadcrumb": "Pull Requests",
@@ -128,7 +136,8 @@
     "deleteRun": "Delete run"
   },
   "overview": {
-    "prBrief": "PR Brief"
+    "prBrief": "PR Brief",
+    "description": "Description"
   },
   "intent": {
     "title": "Intent",

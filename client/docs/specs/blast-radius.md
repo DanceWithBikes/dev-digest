@@ -41,7 +41,8 @@ every string routed through the `blast` i18n namespace.
 - [x] An error renders inline (`priorPrs.error`) without a link and without affecting the Tree/Graph above it — `_components/PriorPrs/PriorPrs.tsx:46` · test: `_components/PriorPrs/PriorPrs.test.tsx:68` ("shows an inline error without a link, and an empty state when there's nothing to show")
 
 ### Wiring
-- [x] `OverviewTab` renders `BlastRadiusCard` after `IntentCard`, inside a full-width grid row (`s.briefFull`, `gridColumn: "1 / -1"`) — `_components/OverviewTab/OverviewTab.tsx:32`, `_components/OverviewTab/styles.ts:11` (`briefFull`) · untested directly (no `OverviewTab.test.tsx`; covered by the e2e flow)
+- [x] `OverviewTab` renders `IntentCard` and `BlastRadiusCard` as two full-width sections separated by a hairline (`s.sectionDivider`) — `_components/OverviewTab/OverviewTab.tsx:31`, `:34`, `_components/OverviewTab/styles.ts:6` (`sectionDivider`) · untested directly (no `OverviewTab.test.tsx`; covered by the e2e flow)
+- [x] The Tree/Graph body is capped at `COLLAPSED_MAX_HEIGHT` (420px) with a fade and a "Show all"/"Show less" toggle (`aria-expanded`) that only appears when the content overflows; the card keys it by `view`, so switching Tree/Graph remounts it collapsed. Stats, `DegradedNotice` and `PriorPrs` stay outside the cap — `_components/CollapsibleBody/CollapsibleBody.tsx:12` (`COLLAPSED_MAX_HEIGHT`), `BlastRadiusCard.tsx:97` (`key={view}`) · test: `_components/CollapsibleBody/CollapsibleBody.test.tsx`
 - [x] `page.tsx` passes `repoId` and `repoFullName` (resolved from `useActiveRepo()`) into `OverviewTab` — `page.tsx:148` · untested directly, same as above
 
 ## Touched packages / modules

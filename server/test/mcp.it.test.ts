@@ -195,7 +195,7 @@ d('MCP surface (Testcontainers pg)', () => {
     while (Date.now() < deadline) {
       const polled = await client.callTool({ name: 'get_findings', arguments: { run_id: runId } });
       structured = polled.structuredContent as typeof structured;
-      if (structured?.run.status !== 'running') break;
+      if (structured?.run.status !== 'queued' && structured?.run.status !== 'running') break;
       await new Promise((r) => setTimeout(r, 50));
     }
 

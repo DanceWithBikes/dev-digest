@@ -76,7 +76,7 @@ export function buildMcpDeps(container: Container, log: Logger): McpDepsWithLife
         pending.map(async (runId) => {
           try {
             const { run } = await reviews.getRunResult(ws, runId);
-            return { runId, running: run.status === 'running' };
+            return { runId, running: run.status === 'queued' || run.status === 'running' };
           } catch {
             return { runId, running: false };
           }

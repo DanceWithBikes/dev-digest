@@ -67,12 +67,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const container = new Container(config, db, opts.overrides);
   app.decorate('container', container);
 
-  // Reap runs left 'running' by a previous (now-dead) process — otherwise they
+  // Reap runs left queued/running by a previous (now-dead) process — otherwise they
   // show as perpetually "running" in the UI and can't be cancelled (no runner).
   //
   // AWAITED before the server accepts requests: a fresh process has no in-flight
   // runs of its own yet (runs only start via POST /review once listening), so
-  // every 'running' row here is genuinely orphaned. Awaiting also closes the
+  // every queued/running row here is genuinely orphaned. Awaiting also closes the
   // race where a brand-new run could be created (and wrongly reaped) in the gap
   // between listening and an async reaper finishing.
   // NOTE: assumes a SINGLE API instance per DB. With multiple replicas this

@@ -39,7 +39,7 @@ export default function PRDetailPage() {
   const isLoading = pullsLoading || (prId != null && detailLoading);
   const { data: reviews, refetch: refetchReviews } = usePrReviews(prId);
 
-  // Live run tracking is SERVER-SOURCED (agent_runs status='running'): survives
+  // Live run tracking is SERVER-SOURCED (agent_runs queued/running): survives
   // navigation AND reload, and self-clears via polling when runs finish.
   const qc = useQueryClient();
   const { data: activeRuns } = usePrActiveRuns(prId);
@@ -47,6 +47,7 @@ export default function PRDetailPage() {
   const deleteRun = useDeleteRun(prId);
   const liveRunIds = (activeRuns ?? []).map((r) => r.run_id);
   const reviewRunning = liveRunIds.length > 0;
+  const queuedCount = (activeRuns ?? []).filter((r) => r.status === "queued").length;
   const cancel = useCancelRun();
   const invalidateActiveRuns = () => {
     if (prId) qc.invalidateQueries({ queryKey: ["pr-active-runs", prId] });
@@ -154,6 +155,7 @@ export default function PRDetailPage() {
           <FindingsTab
             prId={prId}
             liveRunIds={liveRunIds}
+            queuedCount={queuedCount}
             reviewRunning={reviewRunning}
             lethalTrifecta={lethalTrifecta}
             runs={runs}

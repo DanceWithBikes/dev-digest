@@ -71,12 +71,20 @@ export class ReviewRepository {
     return reviewRepo.getReview(this.db, reviewId);
   }
 
-  /** In-flight runs for a PR (status='running') — the server-side source of
-   *  truth for "which agents are running now". Joined with the agent name. */
+  /** In-flight runs for a PR (queued or running) — the server-side source of
+   *  truth for "which agents are working now". Joined with the agent name. */
   activeRunsForPull(
     workspaceId: string,
     prId: string,
-  ): Promise<{ run_id: string; agent_id: string | null; agent_name: string | null; ran_at: string | null }[]> {
+  ): Promise<
+    {
+      run_id: string;
+      agent_id: string | null;
+      agent_name: string | null;
+      ran_at: string | null;
+      status: 'queued' | 'running';
+    }[]
+  > {
     return runRepo.activeRunsForPull(this.db, workspaceId, prId);
   }
 
@@ -104,12 +112,12 @@ export class ReviewRepository {
     return runRepo.deleteAgentRun(this.db, workspaceId, runId);
   }
 
-  /** Mark a still-running run as cancelled (no-op if it already finished). */
+  /** Mark a queued or running run as cancelled (no-op if it already finished). */
   cancelRunIfRunning(runId: string): Promise<boolean> {
     return runRepo.cancelRunIfRunning(this.db, runId);
   }
 
-  /** On boot: any run still 'running' is orphaned (its process died / restarted),
+  /** On boot: any run still queued or running is orphaned (its process died / restarted),
    *  so mark it failed. Prevents permanently stuck "running" runs in the UI. */
   reapStaleRunningRuns(): Promise<number> {
     return runRepo.reapStaleRunningRuns(this.db);
@@ -159,7 +167,7 @@ export class ReviewRepository {
 
   // ---- observability: agent_runs + run_traces ----------------------------
 
-  /** Create an agent_runs row in `running` state; returns its id (= the runId). */
+  /** Create an agent_runs row in `queued` state; returns its id (= the runId). */
   createAgentRun(values: {
     workspaceId: string;
     agentId: string | null;
@@ -168,6 +176,11 @@ export class ReviewRepository {
     model: string | null;
   }): Promise<string> {
     return runRepo.createAgentRun(this.db, values);
+  }
+
+  /** queued → running; false if the run was cancelled while it waited. */
+  startAgentRun(workspaceId: string, runId: string): Promise<boolean> {
+    return runRepo.startAgentRun(this.db, workspaceId, runId);
   }
 
   completeAgentRun(

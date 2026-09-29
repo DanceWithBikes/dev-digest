@@ -19,6 +19,8 @@ import type { UseMutationResult } from "@tanstack/react-query";
 interface FindingsTabProps {
   prId: string | null;
   liveRunIds: string[];
+  /** How many of `liveRunIds` are still waiting for their turn. */
+  queuedCount: number;
   reviewRunning: boolean;
   lethalTrifecta: FindingRecord[];
   runs: ReviewRecord[];
@@ -36,6 +38,7 @@ interface FindingsTabProps {
 export function FindingsTab({
   prId,
   liveRunIds,
+  queuedCount,
   reviewRunning,
   lethalTrifecta,
   runs,
@@ -123,7 +126,7 @@ export function FindingsTab({
           >
             Live review
           </SectionLabel>
-          <RunStatus runIds={liveRunIds} onDone={onRunDone} />
+          <RunStatus runIds={liveRunIds} queuedCount={queuedCount} onDone={onRunDone} />
         </div>
       )}
 

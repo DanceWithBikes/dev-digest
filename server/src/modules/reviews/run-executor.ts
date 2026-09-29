@@ -124,7 +124,26 @@ export class ReviewRunExecutor {
     // `## PR intent (derived)` slot.
     const intentText = await this.deriveIntent(workspaceId, pull, repo, diff, runLog);
 
+    // Agents run one at a time; every run after the first stays `queued` (and
+    // says so in its Live Log) until the loop reaches it.
+    jobs.forEach(({ runId }, i) => {
+      if (i > 0) runLog.forRun(runId).info(`Queued — waiting for ${i} agent(s) ahead`);
+    });
+
     for (const { agent, runId } of jobs) {
+      // queued → running. False = cancelled while it waited: cancelRun already
+      // set the status and completed the bus, so only persist its log here.
+      // A DB error is treated the same way so it can't strand the runs behind it.
+      const started = await this.repo.startAgentRun(workspaceId, runId).catch((err) => {
+        logger?.error({ runId, err: (err as Error).message }, 'review: could not mark run as started');
+        return false;
+      });
+      if (!started) {
+        await this.repo
+          .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed'))
+          .catch(() => undefined);
+        continue;
+      }
       const agentStart = Date.now();
       logger?.info(
         { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },

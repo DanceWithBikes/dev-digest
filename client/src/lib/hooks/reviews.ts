@@ -22,9 +22,12 @@ export interface ActiveRun {
   agent_id: string | null;
   agent_name: string | null;
   ran_at: string | null;
+  /** `queued` while it waits for the agents ahead of it (they run one at a
+      time), `running` once it starts. */
+  status: "queued" | "running";
 }
 
-/** In-flight runs for a PR, from the server (agent_runs where status='running').
+/** In-flight runs for a PR, from the server (agent_runs queued or running).
    Survives reloads/devices; polls while anything is running so it self-clears. */
 export function usePrActiveRuns(prId: string | null | undefined) {
   return useQuery({
@@ -44,7 +47,7 @@ export function usePrRuns(prId: string | null | undefined) {
     queryFn: () => api.get<RunSummary[]>(`/pulls/${prId}/runs`),
     enabled: !!prId,
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((r) => r.status === "running") ? 4000 : false,
+      (query.state.data ?? []).some((r) => r.status === "queued" || r.status === "running") ? 4000 : false,
   });
 }
 

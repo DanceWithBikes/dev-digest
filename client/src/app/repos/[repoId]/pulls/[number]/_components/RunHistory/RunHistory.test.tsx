@@ -41,7 +41,7 @@ function renderRuns(
 ) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} severityByRunId={severityByRunId} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} severityByRunId={severityByRunId} onOpenTrace={() => {}} onDelete={() => {}} />
     </NextIntlClientProvider>,
   );
 }
@@ -75,6 +75,21 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+
+  it("a run waiting for its turn reads 'queued', not 'running'", () => {
+    renderRuns([run({ status: "queued", score: null, blockers: null })]);
+    expect(screen.getByText("queued")).toBeInTheDocument();
+    expect(screen.queryByText("running")).not.toBeInTheDocument();
+  });
+
+  it("offers Delete only on settled runs, never on queued or running ones", () => {
+    renderRuns([
+      run({ run_id: "q", status: "queued" }),
+      run({ run_id: "r", status: "running" }),
+      run({ run_id: "d", status: "done" }),
+    ]);
+    expect(screen.getAllByRole("button", { name: messages.timeline.deleteRun })).toHaveLength(1);
   });
 });
 

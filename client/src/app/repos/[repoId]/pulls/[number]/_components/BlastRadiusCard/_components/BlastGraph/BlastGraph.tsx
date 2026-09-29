@@ -1,7 +1,8 @@
 /* BlastGraph — hand-written SVG node-link diagram (no charting dependency):
    changed symbols -> their callers -> the endpoints/crons those callers reach,
    as three columns of absolutely positioned HTML nodes joined by grey cubic
-   Bézier curves. Changed-symbol and endpoint/cron nodes get a blue border. */
+   Bézier curves. Changed-symbol and endpoint/cron nodes get a blue border. The legend sits
+   on top so it stays visible while the card's body is collapsed. */
 import React from "react";
 import { useTranslations } from "next-intl";
 import type { BlastRadius } from "@devdigest/shared";
@@ -19,27 +20,6 @@ export function BlastGraph({ radius }: { radius: Pick<BlastRadius, "downstream">
 
   return (
     <div>
-      <div style={s.canvas(layout.width, layout.height)} role="img" aria-label={t("graph.ariaLabel")}>
-        <svg width={layout.width} height={layout.height} style={s.svg}>
-          {layout.edges.map((edge) => {
-            const d = edgePath(nodesById, edge);
-            if (!d) return null;
-            return <path key={edge.id} d={d} stroke="var(--border-strong)" strokeWidth={1.5} fill="none" />;
-          })}
-        </svg>
-        {layout.nodes.map((node) => (
-          <div
-            key={node.id}
-            title={node.fullLabel}
-            style={s.node(node.x, node.y, node.kind === "caller" ? "var(--border-strong)" : "var(--accent)")}
-          >
-            <span className="mono" style={s.nodeLabel}>
-              {node.label}
-            </span>
-          </div>
-        ))}
-      </div>
-
       <div style={s.legend}>
         <span style={s.legendItem}>
           <span style={s.legendDot("var(--accent)")} />
@@ -53,6 +33,29 @@ export function BlastGraph({ radius }: { radius: Pick<BlastRadius, "downstream">
           <span style={s.legendDot("var(--accent)")} />
           {t("legend.endpoints")}
         </span>
+      </div>
+
+      <div style={s.scroller}>
+        <div style={s.canvas(layout.width, layout.height)} role="img" aria-label={t("graph.ariaLabel")}>
+          <svg width={layout.width} height={layout.height} style={s.svg}>
+            {layout.edges.map((edge) => {
+              const d = edgePath(nodesById, edge);
+              if (!d) return null;
+              return <path key={edge.id} d={d} stroke="var(--border-strong)" strokeWidth={1.5} fill="none" />;
+            })}
+          </svg>
+          {layout.nodes.map((node) => (
+            <div
+              key={node.id}
+              title={node.fullLabel}
+              style={s.node(node.x, node.y, node.kind === "caller" ? "var(--border-strong)" : "var(--accent)")}
+            >
+              <span className="mono" style={s.nodeLabel}>
+                {node.label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

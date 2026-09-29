@@ -15,6 +15,7 @@ import { DegradedNotice } from "./_components/DegradedNotice";
 import { BlastTree } from "./_components/BlastTree";
 import { BlastGraph } from "./_components/BlastGraph";
 import { PriorPrs } from "./_components/PriorPrs";
+import { CollapsibleBody } from "./_components/CollapsibleBody";
 import { s } from "./styles";
 
 export function BlastRadiusCard({
@@ -91,10 +92,15 @@ export function BlastRadiusCard({
 
       {!hasDownstream(radius) ? (
         <p style={s.noCallers}>{t("noDownstream", { count: stats.symbols })}</p>
-      ) : view === "tree" ? (
-        <BlastTree downstream={radius.downstream} repoFullName={repoFullName} headSha={headSha} />
       ) : (
-        <BlastGraph radius={radius} />
+        // keyed by view: switching Tree/Graph remounts it collapsed
+        <CollapsibleBody key={view}>
+          {view === "tree" ? (
+            <BlastTree downstream={radius.downstream} repoFullName={repoFullName} headSha={headSha} />
+          ) : (
+            <BlastGraph radius={radius} />
+          )}
+        </CollapsibleBody>
       )}
 
       <div style={s.divider}>

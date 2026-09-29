@@ -100,7 +100,7 @@ export const RunSummary = z.object({
   agent_name: z.string().nullable(),
   provider: z.string().nullable(),
   model: z.string().nullable(),
-  status: z.string().nullable(), // running | done | failed | cancelled
+  status: z.string().nullable(), // queued | running | done | failed | cancelled
   error: z.string().nullable(),
   duration_ms: z.number().int().nullable(),
   tokens_in: z.number().int().nullable(),

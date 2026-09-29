@@ -53,11 +53,13 @@
   },
   "runStatus": {
     "elapsed": "Running · {count} agent(s)",
+    "elapsedQueued": "Running · {running} agent(s) · {queued} queued",
     "approved": "approved",
     "reviewed": "reviewed",
     "rejected": "rejected",
     "error": "error",
     "cancelled": "cancelled",
+    "queued": "queued",
     "running": "running",
     "findings": "{count} finding(s)",
     "blockers": " · {count} blockers"

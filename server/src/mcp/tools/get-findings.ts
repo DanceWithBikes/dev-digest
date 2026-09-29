@@ -28,7 +28,8 @@ export function registerGetFindings(server: McpServer, deps: McpDeps): void {
       title: 'Get a run’s findings',
       description:
         'Read a review run’s status, review verdict and findings — poll this with a run_id from ' +
-        'run_agent_on_pr to check progress and read results. A run that failed or was cancelled is ' +
+        'run_agent_on_pr to check progress and read results. run.status is "queued" while the run waits ' +
+        'for other agents ahead of it (they run one at a time), then "running". A run that failed or was cancelled is ' +
         'returned normally (see run.status / run.error), never as a tool error. Filter with ' +
         'min_severity and page with limit.',
       inputSchema: GetFindingsInput,

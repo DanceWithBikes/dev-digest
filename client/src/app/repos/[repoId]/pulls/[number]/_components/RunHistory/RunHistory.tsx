@@ -23,6 +23,8 @@ type Outcome = { key: string; color: string; bg: string; icon: IconName };
 
 function outcomeOf(run: RunSummary): Outcome {
   const status = run.status ?? "";
+  if (status === "queued")
+    return { key: "queued", color: "var(--text-muted)", bg: "var(--bg-hover)", icon: "Clock" };
   if (status === "running")
     return { key: "running", color: "var(--accent)", bg: "var(--accent-bg)", icon: "RefreshCw" };
   if (status === "failed")
@@ -234,7 +236,7 @@ export function RunHistory({
             >
               <Icon.FileText size={13} />
             </button>
-            {onDelete && r.status !== "running" && (
+            {onDelete && r.status !== "queued" && r.status !== "running" && (
               <span
                 role="button"
                 aria-label={t("timeline.deleteRun")}

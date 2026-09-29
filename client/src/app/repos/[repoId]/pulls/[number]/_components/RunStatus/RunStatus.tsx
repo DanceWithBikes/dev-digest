@@ -11,9 +11,12 @@ import { s } from "./styles";
 
 export function RunStatus({
   runIds,
+  queuedCount = 0,
   onDone,
 }: {
   runIds: string[];
+  /** Runs among `runIds` still waiting for the agents ahead of them. */
+  queuedCount?: number;
   onDone?: () => void;
 }) {
   const t = useTranslations("prReview");
@@ -27,6 +30,14 @@ export function RunStatus({
 
   if (runIds.length === 0) return null;
 
+  let elapsedLabel: string | undefined;
+  if (running) {
+    elapsedLabel =
+      queuedCount > 0
+        ? t("runStatus.elapsedQueued", { running: runIds.length - queuedCount, queued: queuedCount })
+        : t("runStatus.elapsed", { count: runIds.length });
+  }
+
   const log: LogLine[] = events.map((e) => ({
     t: e.t,
     k: e.kind as LogLine["k"],
@@ -39,7 +50,7 @@ export function RunStatus({
         log={log}
         running={running}
         height={LOG_HEIGHT}
-        elapsedLabel={running ? t("runStatus.elapsed", { count: runIds.length }) : undefined}
+        elapsedLabel={elapsedLabel}
       />
     </div>
   );

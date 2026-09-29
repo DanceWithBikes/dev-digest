@@ -1,20 +1,28 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
 
 // ---- in-flight / history --------------------------------------------------
 
-/** In-flight runs for a PR (status='running') — the server-side source of
- *  truth for "which agents are running now". Joined with the agent name. */
+/** Statuses of a run that hasn't settled yet: `queued` while it waits for the
+ *  agents ahead of it (they run one at a time), `running` once it starts. */
+const IN_FLIGHT = ['queued', 'running'] as const;
+type InFlightStatus = (typeof IN_FLIGHT)[number];
+
+/** In-flight runs for a PR (queued or running) — the server-side source of
+ *  truth for "which agents are working now". Joined with the agent name. */
 export async function activeRunsForPull(
   db: Db,
   workspaceId: string,
   prId: string,
-): Promise<{ run_id: string; agent_id: string | null; agent_name: string | null; ran_at: string | null }[]> {
+): Promise<
+  { run_id: string; agent_id: string | null; agent_name: string | null; ran_at: string | null; status: InFlightStatus }[]
+> {
   const rows = await db
     .select({
       id: t.agentRuns.id,
+      status: t.agentRuns.status,
       agentId: t.agentRuns.agentId,
       ranAt: t.agentRuns.ranAt,
       agentName: t.agents.name,
@@ -25,7 +33,7 @@ export async function activeRunsForPull(
       and(
         eq(t.agentRuns.workspaceId, workspaceId),
         eq(t.agentRuns.prId, prId),
-        eq(t.agentRuns.status, 'running'),
+        inArray(t.agentRuns.status, [...IN_FLIGHT]),
       ),
     );
   return rows.map((r) => ({
@@ -33,6 +41,8 @@ export async function activeRunsForPull(
     agent_id: r.agentId,
     agent_name: r.agentName ?? null,
     ran_at: r.ranAt ? r.ranAt.toISOString() : null,
+    // the inArray filter above guarantees one of the two
+    status: r.status as InFlightStatus,
   }));
 }
 
@@ -110,30 +120,31 @@ export async function deleteAgentRun(
   return rows.length > 0;
 }
 
-/** Mark a still-running run as cancelled (no-op if it already finished). */
+/** Mark a queued or running run as cancelled (no-op if it already finished). */
 export async function cancelRunIfRunning(db: Db, runId: string): Promise<boolean> {
   const rows = await db
     .update(t.agentRuns)
     .set({ status: 'cancelled' })
-    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.status, 'running')))
+    .where(and(eq(t.agentRuns.id, runId), inArray(t.agentRuns.status, [...IN_FLIGHT])))
     .returning({ id: t.agentRuns.id });
   return rows.length > 0;
 }
 
-/** On boot: any run still 'running' is orphaned (its process died / restarted),
+/** On boot: any run still queued or running is orphaned (its process died / restarted),
  *  so mark it failed. Prevents permanently stuck "running" runs in the UI. */
 export async function reapStaleRunningRuns(db: Db): Promise<number> {
   const rows = await db
     .update(t.agentRuns)
     .set({ status: 'failed' })
-    .where(eq(t.agentRuns.status, 'running'))
+    .where(inArray(t.agentRuns.status, [...IN_FLIGHT]))
     .returning({ id: t.agentRuns.id });
   return rows.length;
 }
 
 // ---- observability: agent_runs + run_traces -------------------------------
 
-/** Create an agent_runs row in `running` state; returns its id (= the runId). */
+/** Create an agent_runs row in `queued` state; returns its id (= the runId).
+ *  `startAgentRun` flips it to `running` when the executor reaches it. */
 export async function createAgentRun(
   db: Db,
   values: {
@@ -152,11 +163,28 @@ export async function createAgentRun(
       prId: values.prId,
       provider: values.provider,
       model: values.model,
-      status: 'running',
+      status: 'queued',
       source: 'local',
     })
     .returning({ id: t.agentRuns.id });
   return row!.id;
+}
+
+/** queued → running when the executor picks the run up. False when the run is
+ *  no longer queued (cancelled while waiting) — the caller must skip it. */
+export async function startAgentRun(db: Db, workspaceId: string, runId: string): Promise<boolean> {
+  const rows = await db
+    .update(t.agentRuns)
+    .set({ status: 'running' })
+    .where(
+      and(
+        eq(t.agentRuns.id, runId),
+        eq(t.agentRuns.workspaceId, workspaceId),
+        eq(t.agentRuns.status, 'queued'),
+      ),
+    )
+    .returning({ id: t.agentRuns.id });
+  return rows.length > 0;
 }
 
 export async function completeAgentRun(

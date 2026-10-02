@@ -9,6 +9,7 @@ import {
   EXCLUDED_DIRS,
   MAX_GLOB_LENGTH,
   MAX_GLOB_WILDCARDS,
+  MAX_PATH_LENGTH,
 } from './constants.js';
 
 /**
@@ -132,6 +133,7 @@ export function validateRoot(root: string): string | null {
 
 /** An attachment may name any tracked path except one inside `.git` (any case). */
 export function validateRelativePath(path: string): string | null {
+  if (path.length > MAX_PATH_LENGTH) return `path must be at most ${MAX_PATH_LENGTH} characters`;
   const problem = relativeProblem(path, 'path');
   if (problem) return problem;
   if (segmentsOf(path).some((s) => s.toLowerCase() === '.git')) {

@@ -5,7 +5,12 @@ import type {
   ContextSelection,
 } from '@devdigest/shared';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
-import { DEFAULT_SEARCH_ROOTS, MAX_ROOTS, SCAN_READ_CONCURRENCY } from './constants.js';
+import {
+  DEFAULT_SEARCH_ROOTS,
+  MAX_ROOTS,
+  MAX_SELECTED_PATHS,
+  SCAN_READ_CONCURRENCY,
+} from './constants.js';
 import {
   compileRoots,
   estimateTokens,
@@ -158,6 +163,9 @@ export class ProjectContextService {
 
   /** Validates every path before anything is stored, then dedupes and sorts. */
   private validatedPaths(paths: string[]): string[] {
+    if (paths.length > MAX_SELECTED_PATHS) {
+      throw new ValidationError(`at most ${MAX_SELECTED_PATHS} paths can be attached`);
+    }
     for (const p of paths) {
       const problem = validateRelativePath(p);
       if (problem) throw new ValidationError(problem);

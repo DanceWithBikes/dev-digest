@@ -10,7 +10,7 @@ import {
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { makeProjectContextService } from './compose.js';
-import { MAX_GLOB_LENGTH, MAX_ROOTS } from './constants.js';
+import { MAX_GLOB_LENGTH, MAX_PATH_LENGTH, MAX_ROOTS, MAX_SELECTED_PATHS } from './constants.js';
 import { validateRelativePath, validateRoot } from './helpers.js';
 
 /**
@@ -24,9 +24,12 @@ import { validateRelativePath, validateRoot } from './helpers.js';
  *
  * Invalid roots or paths answer 422 (the house convention for validation).
  */
-const pathValue = z.string().refine((p) => validateRelativePath(p) === null, {
-  message: 'path must be repo-relative, non-empty and free of ".." and ".git" segments',
-});
+const pathValue = z
+  .string()
+  .max(MAX_PATH_LENGTH)
+  .refine((p) => validateRelativePath(p) === null, {
+    message: 'path must be repo-relative, non-empty and free of ".." and ".git" segments',
+  });
 const rootValue = z
   .string()
   .max(MAX_GLOB_LENGTH)
@@ -35,7 +38,7 @@ const rootValue = z
   });
 
 const RootsBody = z.object({ roots: z.array(rootValue).max(MAX_ROOTS) });
-const SelectionBody = z.object({ paths: z.array(pathValue) });
+const SelectionBody = z.object({ paths: z.array(pathValue).max(MAX_SELECTED_PATHS) });
 const FileQuery = z.object({ path: pathValue });
 const AgentParams = IdParams.extend({ agentId: z.string().uuid() });
 const SkillParams = IdParams.extend({ skillId: z.string().uuid() });

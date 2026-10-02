@@ -18,7 +18,8 @@ Files are read only through the `GitClient` port (`listFiles`, `readFile`) — n
 - **Roots govern listing and preview, not attachments or runs.** An attachment may name any tracked
   path; `missing` is checked against the whole tracked tree, not the roots.
 - **Invalid roots or paths are 422**, via the route's zod refine and again in the service
-  (`ValidationError`); a rejected selection stores nothing.
+  (`ValidationError`); a rejected selection stores nothing. The same goes for a selection over
+  `MAX_SELECTED_PATHS` or a path over `MAX_PATH_LENGTH` (`constants.ts`).
 - **Attachments are paths only**, ordered by path; counts include every stored row, enabled or not.
 - **Doc type rules run in order, first wins** (`spec` before `insights`).
 - **Reviews does not import this module.** It reads the attachment tables through its own repository.

@@ -12,7 +12,7 @@ import {
   validateRelativePath,
   validateRoot,
 } from '../src/modules/project-context/helpers.js';
-import { DEFAULT_SEARCH_ROOTS } from '../src/modules/project-context/constants.js';
+import { DEFAULT_SEARCH_ROOTS, MAX_PATH_LENGTH } from '../src/modules/project-context/constants.js';
 
 describe('project-context helpers', () => {
   it('default roots match docs, specs and insights folders', () => {
@@ -58,6 +58,11 @@ describe('project-context helpers', () => {
     }
     expect(validateRelativePath('docs/a.md')).toBeNull();
     expect(validateRoot('**/docs/**/*.md')).toBeNull();
+  });
+
+  it('rejects attachment paths longer than MAX_PATH_LENGTH', () => {
+    expect(validateRelativePath(`docs/${'a'.repeat(MAX_PATH_LENGTH)}.md`)).not.toBeNull();
+    expect(validateRelativePath(`${'a'.repeat(MAX_PATH_LENGTH - 3)}.md`)).toBeNull();
   });
 
   it('rejects any .git segment in attachment paths, case-insensitively', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ProjectContextService } from '../src/modules/project-context/service.js';
 import type { ContextRepository } from '../src/modules/project-context/ports.js';
 import { NotFoundError, ValidationError } from '../src/platform/errors.js';
+import { MAX_SELECTED_PATHS } from '../src/modules/project-context/constants.js';
 
 function setup(opts: { files?: Record<string, string>; noClone?: boolean; roots?: string[] } = {}) {
   const files = opts.files ?? {};
@@ -110,6 +111,15 @@ describe('ProjectContextService', () => {
     );
     expect(repo.replaceAgentPaths).not.toHaveBeenCalled();
     expect(repo.replaceSkillPaths).not.toHaveBeenCalled();
+  });
+
+  it('rejects a selection above MAX_SELECTED_PATHS', async () => {
+    const { service, repo } = setup();
+    const tooMany = Array.from({ length: MAX_SELECTED_PATHS + 1 }, (_, i) => `docs/${i}.md`);
+    await expect(service.saveAgentSelection('w', 'r', 'a', tooMany)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    expect(repo.replaceAgentPaths).not.toHaveBeenCalled();
   });
 
   it('flags a deleted file as missing and keeps it stored', async () => {

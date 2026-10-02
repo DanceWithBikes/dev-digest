@@ -9,6 +9,11 @@ export const MAX_ROOTS = 20;
 export const MAX_GLOB_LENGTH = 256;
 export const MAX_GLOB_WILDCARDS = 4;
 
+/** Bounds on attached paths: one PUT stays far below Postgres' bind-parameter
+ *  limit, and a run never queues thousands of git reads. */
+export const MAX_SELECTED_PATHS = 200;
+export const MAX_PATH_LENGTH = 1024;
+
 /** Token estimate: ceil(chars / CHARS_PER_TOKEN) (AC-11). */
 export const CHARS_PER_TOKEN = 4;
 

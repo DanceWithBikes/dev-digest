@@ -39,6 +39,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Codebase Patterns
 
+- **2026-10-01 · A 422 from a zod `.refine` puts the human message in `details[].params.issue.message`, not in `ApiError.message`** — `ApiError.message` is the generic "Request validation failed"; showing it to the user tells them nothing. Instead: read `ApiError.details` and pick `params.issue.message` per item, as the roots editor does.
+  Where: `src/lib/api.ts:8` (`ApiError`), `src/app/repos/[repoId]/context/_components/ProjectContextView/helpers.ts:41` (`rootsErrorMessage`)
+
 - **2026-09-25 · One route `_components/` folder MAY import a sibling — but only via the bare folder name, and for a non-obvious reason** — `DiffTab.tsx` importing `../FindingCard` passes `pnpm arch:check`, which reads like siblings are exempt. They are not. `routes-do-not-import-each-other` captures `$1` from `^src/app/([^/]+)/`, so for two folders both under `src/app/repos/` it resolves `$1 = repos` on both sides and cannot fire. `enter-route-components-through-index` then only forbids a target whose LAST segment is not one of `FOLDER_SHARED_FILES` — and `../FindingCard` resolves to `FindingCard/index.ts`, where `index` IS in that set, so the rule's negative lookahead rejects the match. The permission comes entirely from the index rule: write the same import as `../FindingCard/FindingCard` and it fails the gate. So never "tidy" a sibling import into its deep form, and never assume a passing `arch:check` means sibling imports are generally allowed — a sibling folder without an `index.ts` cannot be imported at all.
   Where: `.dependency-cruiser.cjs:20` (`FOLDER_SHARED_FILES`), `.dependency-cruiser.cjs:45` (`routes-do-not-import-each-other`), `.dependency-cruiser.cjs:67` (the negative lookahead of `enter-route-components-through-index`), `src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/DiffTab.tsx` (the `../FindingCard` import)
 
@@ -53,6 +56,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   **Correction (2026-09-19):** the real clamp is `Math.min(focusIdx, Math.max(shown.length - 1, 0))` — the inner `Math.max` keeps `focus` at 0 instead of -1 when the filter leaves nothing to show.
 
 ## Tool & Library Notes
+
+- **2026-10-01 · Keyboard tests in jsdom are structural only; `relativeTime` needs a fixed `now`** — jsdom performs no native Space/Enter activation and `@testing-library/user-event` is not installed, so don't try to simulate key activation. Assert the structural contract instead: a native `<button>`/`<input type=checkbox>`, enabled, `tabIndex >= 0`, focusable, in DOM order. Real keypresses need an agent-browser e2e step. Separately, next-intl `useFormatter().relativeTime` logs `ENVIRONMENT_FALLBACK` and is non-deterministic unless the provider gets `now={…}`. Derive fixture timestamps from that same constant.
+  Where: `src/app/repos/[repoId]/context/_components/ProjectContextView/ProjectContextView.test.tsx:80` (`NextIntlClientProvider now={NOW}`)
 
 - **2026-09-29 · agent-browser can't screenshot below the fold in the studio — enlarge the viewport** — the document never scrolls: `AppFrame` scrolls its inner `<main>` (`overflow: auto`), so `agent-browser screenshot --full` captures only the viewport and `scrollintoview` leaves the shot unchanged. To see lower parts of a page, run `agent-browser set viewport 1440 1500` (or taller), reload, then screenshot.
   Where: `src/vendor/ui/shell/AppFrame.tsx:29` (`<main … overflow: "auto">`)

@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { join } from 'node:path';
-import { mkdir, readFile, access, rm } from 'node:fs/promises';
+import { join, sep } from 'node:path';
+import { mkdir, readFile, access, rm, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
   GitClient,
@@ -126,8 +126,44 @@ export class SimpleGitClient implements GitClient {
     }));
   }
 
+  /**
+   * Working-tree read, contained to the clone: the path must be repo-relative
+   * with no `..` segment, and after resolving symlinks the target must still
+   * sit inside the clone (a committed symlink to `/etc/hosts` must not read).
+   */
   async readFile(repo: RepoRef, path: string): Promise<string> {
-    return readFile(join(this.clonePathFor(repo), path), 'utf8');
+    assertRelativePath(path);
+    assertNotGitDir(path);
+    const root = await realpath(this.clonePathFor(repo));
+    const target = await realpath(join(root, path));
+    if (!target.startsWith(root + sep)) throw new Error(`path escapes the clone: ${path}`);
+    // The resolved target may sit in `.git` via a symlink or a case-folded name.
+    assertNotGitDir(target.slice(root.length + 1));
+    return readFile(target, 'utf8');
+  }
+
+  /**
+   * Regular files tracked at HEAD. `-z` avoids git's quoting of unusual names;
+   * mode 120000 (symlink) and 160000 (submodule) entries are skipped. Everything
+   * in the index is tracked, so nothing under `.git/` can appear.
+   */
+  async listFiles(repo: RepoRef): Promise<string[]> {
+    const raw = await this.git(repo).raw(['ls-tree', '-r', '-z', '--full-tree', 'HEAD']);
+    const out: string[] = [];
+    for (const entry of raw.split('\0')) {
+      if (!entry) continue;
+      const tab = entry.indexOf('\t');
+      if (tab < 0) continue;
+      const mode = entry.slice(0, entry.indexOf(' '));
+      if (mode === '120000' || mode === '160000') continue;
+      out.push(entry.slice(tab + 1));
+    }
+    return out;
+  }
+
+  async resolveRef(repo: RepoRef, ref: string): Promise<string> {
+    const sha = await this.git(repo).raw(['rev-parse', '--verify', `${ref}^{commit}`]);
+    return sha.trim();
   }
 
   /**
@@ -138,7 +174,29 @@ export class SimpleGitClient implements GitClient {
    * not exist there, which is how callers detect "fetch the PR head first".
    */
   async readFileAt(repo: RepoRef, ref: string, path: string): Promise<string> {
+    assertRelativePath(path);
     return this.git(repo).raw(['show', `${ref}:${path}`]);
+  }
+}
+
+/** Lexical guard shared by the two read paths: repo-relative, no `..` segment, no NUL. */
+function assertRelativePath(path: string): void {
+  if (
+    !path ||
+    path.includes('\0') ||
+    path.startsWith('/') ||
+    path.startsWith('\\') ||
+    /^[A-Za-z]:/.test(path) ||
+    path.split(/[\\/]/).includes('..')
+  ) {
+    throw new Error(`invalid repo-relative path: ${path}`);
+  }
+}
+
+/** The clone's `.git` holds the remote URL with its token: never readable as a file. */
+function assertNotGitDir(clonePath: string): void {
+  if (clonePath.split(/[\\/]/)[0]!.toLowerCase() === '.git') {
+    throw new Error(`path is inside .git: ${clonePath}`);
   }
 }
 

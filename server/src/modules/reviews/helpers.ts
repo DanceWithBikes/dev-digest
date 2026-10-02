@@ -34,6 +34,42 @@ export function selectSkillBodies(links: LinkedSkill[]): string[] {
     .map((l) => `### ${l.skill.name}\n${l.skill.body}`);
 }
 
+/** A linked skill plus the Project Context paths attached to it (this repo). */
+export interface LinkedSkillContext {
+  skill: { name: string; enabled: boolean };
+  paths: string[];
+}
+
+export interface ContextPathEntry {
+  path: string;
+  /** `agent` or `skill: <name>` — the first owner that contributed the path. */
+  origin: string;
+}
+
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The documents a run sends, in order: the agent's own paths first, then each
+ * ENABLED linked skill's paths in link order; ascending within one owner. A
+ * path attached more than once keeps its first origin.
+ */
+export function collectContextPaths(agentPaths: string[], links: LinkedSkillContext[]): ContextPathEntry[] {
+  const seen = new Set<string>();
+  const out: ContextPathEntry[] = [];
+  const add = (paths: string[], origin: string) => {
+    for (const path of [...paths].sort(byCodeUnit)) {
+      if (seen.has(path)) continue;
+      seen.add(path);
+      out.push({ path, origin });
+    }
+  };
+  add(agentPaths, 'agent');
+  for (const l of links) {
+    if (l.skill.enabled) add(l.paths, `skill: ${l.skill.name}`);
+  }
+  return out;
+}
+
 export interface ReviewDtoFinding extends Finding {
   review_id: string;
   accepted_at: string | null;

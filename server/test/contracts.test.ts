@@ -249,6 +249,25 @@ describe('AI contracts parse fixtures', () => {
       log: [{ t: '00.00', kind: 'info', msg: 'started' }],
     });
     expect(trace.tool_calls).toHaveLength(1);
+    expect(trace.context_docs).toBeUndefined();
+  });
+
+  it('RunTrace context_docs accepts sent and not_found entries', () => {
+    const trace = RunTrace.parse({
+      config: { agent: 'A', model: 'm' },
+      stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null, findings: 0, grounding: '' },
+      prompt_assembly: { system: 's', user: 'u' },
+      tool_calls: [],
+      raw_output: '{}',
+      memory_pulled: [],
+      specs_read: ['docs/a.md'],
+      context_docs: [
+        { path: 'docs/a.md', origin: 'agent', version: 'abc123', status: 'sent', tokens: 3, text: 'hello' },
+        { path: 'docs/b.md', origin: 'skill: x', version: 'working-tree', status: 'not_found', tokens: 0, text: null },
+      ],
+      log: [],
+    });
+    expect(trace.context_docs).toHaveLength(2);
   });
 });
 

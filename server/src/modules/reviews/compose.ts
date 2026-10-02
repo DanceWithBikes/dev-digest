@@ -1,11 +1,14 @@
 import type { RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import type { ReviewRepository } from './repository.js';
-import { MAX_ISSUE_BODY_CHARS, MAX_SPEC_CHARS, INTENT_MAX_TOKENS, INTENT_TEMPERATURE } from './constants.js';
+import { WORKING_TREE, MAX_ISSUE_BODY_CHARS, MAX_SPEC_CHARS, INTENT_MAX_TOKENS, INTENT_TEMPERATURE } from './constants.js';
 import { parseIssueRef, parseSpecRef } from './intent-helpers.js';
 import { IntentSchema, SYSTEM_PROMPT, buildUserPrompt } from './intent-prompt.js';
 import type {
   ClassifyResult,
+  ContextDocRead,
+  ContextDocReader,
+  PrForContext,
   GatheredIntentSources,
   GatheredIssue,
   GatheredSpec,
@@ -190,4 +193,83 @@ export function makeIntentEngine(container: Container, repo: ReviewRepository): 
     collector: new RepoIntentSourceCollector(container, repo),
     classifier: new LlmIntentClassifier(container),
   };
+}
+
+/**
+ * Reads attached Project Context documents with the same three attempts as
+ * `RepoIntentSourceCollector#readSpecAtHead`, but batched: the PR head is
+ * fetched AT MOST ONCE per call, however many paths are left after attempt 1.
+ *  1. `git show <head_sha>:<path>` — version = head sha;
+ *  2. one `fetchPullHead`, then `git show pr-<n>:<path>` — version = the
+ *     resolved sha of `pr-<n>` (a ref name is not a version);
+ *  3. the working tree — version = `working-tree`.
+ * Every failure is per path; a path nothing can read is absent from the result.
+ */
+export class GitContextDocReader implements ContextDocReader {
+  constructor(private container: Container) {}
+
+  async readAll(repo: RepoRef, pr: PrForContext, paths: string[]): Promise<Map<string, ContextDocRead>> {
+    const out = new Map<string, ContextDocRead>();
+    let remaining = [...paths];
+
+    let git: Container['git'];
+    try {
+      git = this.container.git;
+    } catch {
+      return out;
+    }
+
+    const next: string[] = [];
+    for (const path of remaining) {
+      try {
+        out.set(path, { text: await git.readFileAt(repo, pr.headSha, path), version: pr.headSha });
+      } catch {
+        next.push(path);
+      }
+    }
+    remaining = next;
+
+    if (remaining.length > 0) {
+      let prVersion: string | null = null;
+      try {
+        await git.fetchPullHead(repo, pr.number);
+        prVersion = await git.resolveRef(repo, `pr-${pr.number}`);
+      } catch {
+        // Not a GitHub remote, no network, or the PR ref is gone.
+      }
+      if (prVersion) {
+        const left: string[] = [];
+        for (const path of remaining) {
+          try {
+            out.set(path, { text: await git.readFileAt(repo, `pr-${pr.number}`, path), version: prVersion });
+          } catch {
+            left.push(path);
+          }
+        }
+        remaining = left;
+      }
+    }
+
+    // Working-tree fallback reads tracked regular files only: never `.git/**`,
+    // untracked files or anything else the clone happens to hold.
+    let tracked: Set<string>;
+    try {
+      tracked = new Set(remaining.length > 0 ? await git.listFiles(repo) : []);
+    } catch {
+      tracked = new Set();
+    }
+    for (const path of remaining) {
+      if (!tracked.has(path)) continue;
+      try {
+        out.set(path, { text: await git.readFile(repo, path), version: WORKING_TREE });
+      } catch {
+        // not found on any reachable ref
+      }
+    }
+    return out;
+  }
+}
+
+export function makeContextDocReader(container: Container): ContextDocReader {
+  return new GitContextDocReader(container);
 }

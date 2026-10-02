@@ -15,6 +15,8 @@
 export {
   assemblePrompt,
   wrapUntrusted,
+  escapeUntrustedContent,
+  type ProjectContextDoc,
   type PromptParts,
   type AssembledPrompt,
 } from './prompt.js';

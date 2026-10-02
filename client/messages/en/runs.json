@@ -54,7 +54,13 @@
       "fullscreen": "Open fullscreen",
       "tokens": "~{count} tokens",
       "search": "Search in this block…",
-      "noMatches": "No matches for “{q}”."
+      "noMatches": "No matches for “{q}”.",
+      "docOrigin": "origin",
+      "docVersion": "version",
+      "docTokens": "~{count} tokens",
+      "docNotFound": "not found",
+      "docOpen": "Open {path}",
+      "contextDocs": "Project context · attached specs"
     },
     "tools": {
       "args": "args",
@@ -69,7 +75,7 @@
     "running": "running",
     "completed": "completed",
     "copyRawOutput": "Copy raw output",
-  "copied": "Copied!",
+    "copied": "Copied!",
     "tracePending": "Trace is written when the run completes — see the Live log tab.",
     "loadingTrace": "Loading trace…",
     "noTrace": "No trace available yet."

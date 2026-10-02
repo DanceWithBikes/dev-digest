@@ -210,6 +210,14 @@ export interface GitClient {
    * creates. Rejects when the ref or the path is unknown there.
    */
   readFileAt(repo: RepoRef, ref: string, path: string): Promise<string>;
+  /**
+   * Repo-relative paths of the regular files tracked at the clone's `HEAD`
+   * (`git ls-tree -r`). Symlinks and submodules are omitted. Rejects when the
+   * repo has no clone.
+   */
+  listFiles(repo: RepoRef): Promise<string[]>;
+  /** Resolves `ref` to a full commit sha (`git rev-parse --verify <ref>^{commit}`). Rejects when unknown. */
+  resolveRef(repo: RepoRef, ref: string): Promise<string>;
   clonePathFor(repo: RepoRef): string;
 }
 

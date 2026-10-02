@@ -70,6 +70,23 @@ export const RunStats = z.object({
 });
 export type RunStats = z.infer<typeof RunStats>;
 
+/**
+ * One project-context document attached to a run (SPEC-01). `text` is the
+ * exact (escaped) text between that document's delimiters in the prompt;
+ * null when the document was not found.
+ */
+export const AttachedContextDoc = z.object({
+  path: z.string(),
+  /** `agent` or `skill: <name>` — which attachment first contributed it. */
+  origin: z.string(),
+  /** Commit SHA, or `working-tree` when read from the clone's working tree. */
+  version: z.string(),
+  status: z.enum(['sent', 'not_found']),
+  tokens: z.number().int(),
+  text: z.string().nullable(),
+});
+export type AttachedContextDoc = z.infer<typeof AttachedContextDoc>;
+
 /** The single-document trace stored in `run_traces.trace`. */
 export const RunTrace = z.object({
   config: z.object({
@@ -86,6 +103,8 @@ export const RunTrace = z.object({
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
   specs_read: z.array(z.string()),
+  /** Optional so traces stored before project context still parse. */
+  context_docs: z.array(AttachedContextDoc).optional(),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;

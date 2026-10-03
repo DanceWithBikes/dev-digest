@@ -265,6 +265,8 @@ export interface MockGitOptions {
   syncedHead?: string;
   /** Simulate a repo with no clone on disk: `listFiles` rejects. */
   noClone?: boolean;
+  /** Fixture for `countFileCommits` (defaults to no history). */
+  fileCommitCounts?: { commits: number; byPath: Record<string, number> };
 }
 
 export class MockGitClient implements GitClient {
@@ -328,6 +330,9 @@ export class MockGitClient implements GitClient {
   }
   async resolveRef(_repo: RepoRef, _ref: string): Promise<string> {
     return this.opts.head ?? 'a1b2c3d4';
+  }
+  async countFileCommits(): Promise<{ commits: number; byPath: Record<string, number> }> {
+    return this.opts.fileCommitCounts ?? { commits: 0, byPath: {} };
   }
 }
 

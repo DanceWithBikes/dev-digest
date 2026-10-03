@@ -74,7 +74,10 @@ export class OpenRouterProvider implements LLMProvider {
 
   async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     const jsonSchema = toJsonSchema(req.schema, req.schemaName);
-    const maxRetries = req.maxRetries ?? 2;
+    const maxRetries = req.singleAttempt ? 0 : (req.maxRetries ?? 2);
+    // Default behaviour: the constructor deadline bounds every attempt and
+    // `req.timeoutMs` is ignored. Only a single-attempt request takes its own limit.
+    const deadlineMs = req.singleAttempt ? (req.timeoutMs ?? this.deadlineMs) : this.deadlineMs;
     const messages = [...req.messages];
     let tokensIn = 0;
     let tokensOut = 0;
@@ -82,22 +85,30 @@ export class OpenRouterProvider implements LLMProvider {
     let lastRaw = '';
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      const res = await this.createWithDeadline(req.schemaName, {
-        model: req.model,
-        messages,
-        temperature: req.temperature ?? 0,
-        ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: req.schemaName, schema: jsonSchema.schema, strict: true },
+      const res = await this.createWithDeadline(
+        req.schemaName,
+        deadlineMs,
+        req.singleAttempt === true,
+        {
+          model: req.model,
+          messages,
+          temperature: req.temperature ?? 0,
+          ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: req.schemaName, schema: jsonSchema.schema, strict: true },
+          },
+          // OpenRouter session grouping — extra body field (spread is exempt from
+          // excess-property checks). Only sent when talking to OpenRouter.
+          ...(this.id === 'openrouter' && req.sessionId ? { session_id: req.sessionId } : {}),
+          // OpenRouter usage accounting — ask it to return the REAL generation
+          // cost (USD) in `usage.cost`, instead of estimating from a price book.
+          ...(this.id === 'openrouter' ? { usage: { include: true } } : {}),
+          // OpenRouter reasoning control — reasoning tokens count against
+          // `max_tokens`. Only sent when the caller sets it.
+          ...(this.id === 'openrouter' && req.reasoning ? { reasoning: req.reasoning } : {}),
         },
-        // OpenRouter session grouping — extra body field (spread is exempt from
-        // excess-property checks). Only sent when talking to OpenRouter.
-        ...(this.id === 'openrouter' && req.sessionId ? { session_id: req.sessionId } : {}),
-        // OpenRouter usage accounting — ask it to return the REAL generation
-        // cost (USD) in `usage.cost`, instead of estimating from a price book.
-        ...(this.id === 'openrouter' ? { usage: { include: true } } : {}),
-      });
+      );
 
       // OpenRouter can return HTTP 200 with no `choices` (an upstream provider
       // error / moderation / free-tier limit in the body) — surface it.
@@ -125,6 +136,24 @@ export class OpenRouterProvider implements LLMProvider {
           attempts: attempt,
         };
       }
+      // A single-attempt call cut off at `max_tokens` gets no repair turn; say so
+      // instead of reporting a misleading schema failure, and keep the usage.
+      // Other callers keep their repair re-prompt unchanged.
+      if (req.singleAttempt && choice.finish_reason === 'length') {
+        throw Object.assign(
+          new Error(
+            `OpenRouter output for ${req.schemaName} was truncated at max_tokens (finish_reason: length)` +
+              (req.maxTokens ? ` (max_tokens ${req.maxTokens})` : ''),
+          ),
+          {
+            usage: {
+              tokensIn,
+              tokensOut,
+              costUsd: costFromApi ?? this.estimateCost?.(req.model, tokensIn, tokensOut) ?? null,
+            },
+          },
+        );
+      }
       messages.push({ role: 'assistant', content: lastRaw });
       messages.push({ role: 'user', content: parsed.repromptMessage });
     }
@@ -138,11 +167,15 @@ export class OpenRouterProvider implements LLMProvider {
    */
   private async createWithDeadline(
     schemaName: string,
+    deadlineMs: number,
+    singleAttempt: boolean,
     body: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
   ): Promise<OpenAI.Chat.ChatCompletion> {
     try {
       return await this.client.chat.completions.create(body, {
-        signal: AbortSignal.timeout(this.deadlineMs),
+        signal: AbortSignal.timeout(deadlineMs),
+        // A single-attempt request must make exactly one HTTP request.
+        ...(singleAttempt ? { maxRetries: 0 } : {}),
       });
     } catch (err) {
       // Aborted mid-body → fetch's AbortError; aborted before headers → the
@@ -153,7 +186,7 @@ export class OpenRouterProvider implements LLMProvider {
         (err as Error)?.name === 'TimeoutError';
       if (aborted) {
         throw new Error(
-          `OpenRouter ${schemaName} request exceeded the ${this.deadlineMs / 1000}s deadline ` +
+          `OpenRouter ${schemaName} request exceeded the ${deadlineMs / 1000}s deadline ` +
             '(connection stayed open with no response — upstream model stalled)',
         );
       }

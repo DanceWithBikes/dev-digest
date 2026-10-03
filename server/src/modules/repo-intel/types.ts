@@ -44,6 +44,14 @@ export interface IndexState extends IndexResult {
   /** True when the layer is running on the ripgrep fallback. */
   degraded?: boolean;
   degradedReason?: DegradedReason;
+  /** Rank included hotness (the clone had usable history). Absent on rows written before v3. */
+  hotnessAvailable?: boolean;
+  /** Commits counted for hotness (0 when none). */
+  hotnessCommits?: number;
+  /** JS/TS candidate files seen on disk (`stats.totalCandidates`); absent on older incremental rows. */
+  candidateFiles?: number;
+  /** Candidates dropped by the file-count bound (`stats.bounded`). */
+  boundedFiles?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,4 +176,17 @@ export interface RepoIntel {
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+
+  // --- SPEC-02: strict, read-only index readers ----------------------------
+  // Unlike the reads above, these let a DB error propagate so a consumer can
+  // tell "no index" (null / empty) from "the read failed". All return empty /
+  // null when `repoIntelEnabled` is off.
+  /** `null` only when no state row exists; any DB error is thrown. */
+  readIndexState(repoId: string): Promise<IndexState | null>;
+  /** Every `file_rank` row, `rank DESC, path ASC`. */
+  getRankedFiles(repoId: string): Promise<Array<{ path: string; rank: number }>>;
+  /** Every import edge, sorted by `from` then `to`. */
+  getImportEdges(repoId: string): Promise<Array<{ from: string; to: string }>>;
+  /** Endpoints per file from `file_facts`, sorted by file; stored order within a file. */
+  getEndpoints(repoId: string): Promise<Array<{ file: string; endpoint: string }>>;
 }

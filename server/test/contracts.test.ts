@@ -8,11 +8,12 @@ import {
   BlastRadiusResponse,
   PrHistoryResponse,
   Risks,
+  PrBrief,
   PrHistory,
   SmartDiff,
   SmartDiffRole,
   Conformance,
-  Onboarding,
+  OnboardingTour,
   EvalRun,
   MemoryItem,
   RunTrace,
@@ -68,6 +69,29 @@ describe('AI contracts parse fixtures', () => {
       evidence: [{ component: 'untrusted_input', file: 'src/api/public/webhooks.ts', line: 61 }],
     });
     expect(f.trifecta_components).toContain('exfil_path');
+  });
+
+  it('PrBrief accepts a valid brief and rejects a zero line / ref', () => {
+    const brief = {
+      summary: 's',
+      intent: null,
+      blast: null,
+      risks: { risks: [{ kind: 'k', title: 't', explanation: 'e', severity: 'low', file_refs: ['a.ts:3-5', 'b.ts'] }] },
+      history: { history: [] },
+      review_focus: [{ file: 'a.ts', line: 3, reason: 'r' }],
+      missing: [{ source: 'intent', reason: 'no intent derived for this PR' }],
+      head_sha: 'abc',
+      generated_at: '2026-10-03T00:00:00.000Z',
+      model: 'm',
+      cost_usd: null,
+      tokens_in: null,
+      tokens_out: null,
+    };
+    expect(() => PrBrief.parse(brief)).not.toThrow();
+    expect(() => PrBrief.parse({ ...brief, review_focus: [{ file: 'a.ts', line: 0, reason: 'r' }] })).toThrow();
+    expect(() =>
+      PrBrief.parse({ ...brief, risks: { risks: [{ ...brief.risks.risks[0], file_refs: ['a.ts:0'] }] } }),
+    ).toThrow();
   });
 
   it('Intent / BlastRadius / Risks / PrHistory', () => {
@@ -193,7 +217,7 @@ describe('AI contracts parse fixtures', () => {
     expect(SmartDiffRole.options).toEqual(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
   });
 
-  it('Conformance / Onboarding / EvalRun / MemoryItem', () => {
+  it('Conformance / OnboardingTour / EvalRun / MemoryItem', () => {
     expect(() =>
       Conformance.parse({
         spec_id: 's1',
@@ -203,8 +227,27 @@ describe('AI contracts parse fixtures', () => {
       }),
     ).not.toThrow();
     expect(() =>
-      Onboarding.parse({
-        sections: [{ kind: 'architecture', title: 'T', body: 'b', links: [] }],
+      OnboardingTour.parse({
+        repo_full_name: 'acme/api',
+        commit_sha: 'abc',
+        generated_at: '2026-10-03T00:00:00.000Z',
+        status: 'no_data',
+        indexed_files: 0,
+        candidate_files: 0,
+        dropped_file_facts: 0,
+        provider: 'openai',
+        model: 'gpt-5',
+        model_call_made: false,
+        tokens_in: 0,
+        tokens_out: 0,
+        cost_usd: null,
+        sections: [
+          { id: 'architecture', origin: 'skeleton', prose: '', directories: [], diagram: { nodes: [], edges: [] } },
+          { id: 'critical-paths', origin: 'skeleton', entries: [] },
+          { id: 'run-locally', origin: 'skeleton', steps: [] },
+          { id: 'reading-path', origin: 'skeleton', entries: [] },
+          { id: 'first-tasks', origin: 'skeleton', tasks: [] },
+        ],
       }),
     ).not.toThrow();
     expect(() =>

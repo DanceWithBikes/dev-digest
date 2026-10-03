@@ -18,9 +18,6 @@ export const REVIEW_STRATEGY = 'single-pass' as const;
  */
 export const CHARS_PER_TOKEN = 4;
 
-/** Recorded as a Project Context document's version when read off the clone's working tree. */
-export const WORKING_TREE = 'working-tree';
-
 /**
  * Intent Layer (L03) constants.
  *

@@ -27,6 +27,9 @@ import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
 import { resolveFeatureModel } from '../modules/settings/feature-models.js';
+import { makeBlastService } from '../modules/blast/compose.js';
+import type { BlastLog } from '../modules/blast/ports.js';
+import type { BlastService } from '../modules/blast/service.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
@@ -122,6 +125,15 @@ export class Container {
    */
   featureModel(workspaceId: string, id: FeatureModelId): Promise<FeatureModelChoice> {
     return resolveFeatureModel(this, workspaceId, id);
+  }
+
+  /**
+   * The Blast Radius map, for modules that may not import `blast/` (the brief).
+   * Produced by the same code the Overview card uses (self-file filter and
+   * degradation refinement included).
+   */
+  blastReader(log: BlastLog): Pick<BlastService, 'forPull'> {
+    return makeBlastService(this, log);
   }
 
   get codeIndex(): CodeIndex {

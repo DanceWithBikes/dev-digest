@@ -9,11 +9,31 @@
   "noHistory": "No prior PRs overlap these files.",
   "overlap": "{count} overlap",
   "unavailable": "Brief not available yet.",
-  "unavailableHint": "Run a review or open the PR to compute it.",
   "why": {
     "title": "git-why",
     "blame": "blame",
     "noHistory": "No history available for this line.",
     "noCommits": "No commits found for this line."
-  }
+  },
+  "generateHint": "Generate a brief to summarize this PR, its risks and where to look first.",
+  "generate": "Generate brief",
+  "regenerate": "Regenerate brief",
+  "retry": "Retry",
+  "generateError": "Couldn't generate the brief. Try again.",
+  "missing": {
+    "title": "Missing data",
+    "source": {
+      "intent": "Intent",
+      "blast": "Blast radius",
+      "specs": "Specs",
+      "diff": "Diff"
+    }
+  },
+  "risksTitle": "Risk areas",
+  "focus": {
+    "title": "Review focus — read these first ({count})",
+    "empty": "Nothing flagged for a first read."
+  },
+  "generatedAt": "Generated {time} · {model}",
+  "stale": "Stale — generated for {sha}"
 }

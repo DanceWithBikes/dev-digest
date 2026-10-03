@@ -19,6 +19,7 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [security](security/SKILL.md) | Full-stack | OWASP Top 10:2025, auth, injection, uploads, secrets |
 | [mermaid-diagram](mermaid-diagram/SKILL.md) | Shared | Mermaid diagrams in markdown (flowcharts, sequence, ERD, …) |
 | [pr-self-review](pr-self-review/SKILL.md) | Workflow | Pre-PR gate: routes every local change to the matching skills above (UI skills on `client/`, backend skills on `server/` + `reviewer-core/`), runs `arch:check` + `typecheck`, records PASS / BLOCKED; a critical finding blocks `gh pr create` via `.claude/hooks/pr-self-review-gate.mjs` |
+| [workflow-retro](workflow-retro/SKILL.md) | Workflow | Retro of a multi-agent run: tokens, cache, tool calls, duration and parallelism per agent (nested subagents included, `--deep` reads their logs), concrete actions, one row appended to `docs/retros/ledger.md` |
 
 Adding a review skill? Register it in [pr-self-review/skill-routing.json](pr-self-review/skill-routing.json) (which files it reviews), or under `notForReview` there - otherwise the pre-PR gate reports it as unmapped.
 

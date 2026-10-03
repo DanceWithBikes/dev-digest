@@ -1,5 +1,5 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { join, sep } from 'node:path';
+import { join, sep, resolve } from 'node:path';
 import { mkdir, readFile, access, rm, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
@@ -159,6 +159,60 @@ export class SimpleGitClient implements GitClient {
       out.push(entry.slice(tab + 1));
     }
     return out;
+  }
+
+  /**
+   * One `git log -n <max> --name-only -z` read over the local clone (no network).
+   * `core.quotepath=off` plus `-z` keep non-ASCII paths verbatim. Shallow-boundary
+   * commits (listed in the file `git rev-parse --git-path shallow` names) are
+   * excluded from both `commits` and `byPath`: git shows a boundary commit as a
+   * root that adds every file. `--name-only` lists nothing for merge commits, so a
+   * merge adds to `commits` but contributes 0 file touches.
+   */
+  async countFileCommits(
+    repo: RepoRef,
+    maxCommits: number,
+  ): Promise<{ commits: number; byPath: Record<string, number> }> {
+    const g = this.git(repo);
+    const boundary = await this.shallowBoundary(repo);
+    const raw = await g.raw([
+      '-c',
+      'core.quotepath=off',
+      'log',
+      '-n',
+      String(Math.max(0, Math.floor(maxCommits))),
+      '--name-only',
+      '-z',
+      '--format=%x01%H%x02',
+    ]);
+    const byPath: Record<string, number> = {};
+    let commits = 0;
+    for (const chunk of raw.split('\x01')) {
+      const end = chunk.indexOf('\x02');
+      if (end < 0) continue;
+      const sha = chunk.slice(0, end);
+      if (boundary.has(sha)) continue;
+      commits++;
+      const seen = new Set<string>();
+      for (const name of chunk.slice(end + 1).split('\0')) {
+        const path = name.replace(/^\n+/, '');
+        if (!path || seen.has(path)) continue;
+        seen.add(path);
+        byPath[path] = (byPath[path] ?? 0) + 1;
+      }
+    }
+    return { commits, byPath };
+  }
+
+  /** Shas in the clone's `shallow` file; empty when the clone is not shallow. */
+  private async shallowBoundary(repo: RepoRef): Promise<Set<string>> {
+    const out = (await this.git(repo).raw(['rev-parse', '--git-path', 'shallow'])).trim();
+    try {
+      const text = await readFile(resolve(this.clonePathFor(repo), out), 'utf8');
+      return new Set(text.split('\n').map((l) => l.trim()).filter(Boolean));
+    } catch {
+      return new Set();
+    }
   }
 
   async resolveRef(repo: RepoRef, ref: string): Promise<string> {

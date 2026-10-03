@@ -66,13 +66,20 @@ export default function PRDetailPage() {
 
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
-  const setParam = (key: string, val: string | null) => {
+  const targetFile = search.get("file");
+  const setParams = (changes: Record<string, string | null>) => {
     const sp = new URLSearchParams(search.toString());
-    if (val == null) sp.delete(key);
-    else sp.set(key, val);
+    for (const [key, val] of Object.entries(changes)) {
+      if (val == null) sp.delete(key);
+      else sp.set(key, val);
+    }
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
-  const setTab = (t: string) => setParam("tab", t);
+  const setParam = (key: string, val: string | null) => setParams({ [key]: val });
+  // Leaving the diff tab drops the target file so a later visit doesn't re-scroll.
+  const setTab = (t: string) => setParams({ tab: t, file: null });
+  // Brief review-focus items: Files changed with the file in the URL (survives reload).
+  const openFile = (path: string) => setParams({ tab: "diff", file: path });
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -148,6 +155,8 @@ export default function PRDetailPage() {
             headSha={pr.head_sha}
             repoId={repoId}
             repoFullName={repoFullName}
+            files={pr.files}
+            onOpenFile={openFile}
           />
         )}
 
@@ -186,6 +195,7 @@ export default function PRDetailPage() {
             canComment={pr.status === "open"}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            targetFile={targetFile}
           />
         )}
       </div>

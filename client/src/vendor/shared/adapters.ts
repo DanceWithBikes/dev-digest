@@ -61,6 +61,25 @@ export interface StructuredRequest<T> {
   maxTokens?: number;
   timeoutMs?: number;
   maxRetries?: number;
+  /**
+   * Exactly one HTTP request, no repair re-prompt and no transport retry: the
+   * provider passes SDK `{ maxRetries: 0, signal: AbortSignal.timeout(timeoutMs) }`
+   * (so a timeout really aborts the request), skips its own retry wrapper, and
+   * throws on a non-2xx response or a schema-invalid body. `maxRetries` is ignored.
+   * Default behaviour for every caller that does not set it is unchanged.
+   */
+  singleAttempt?: boolean;
+  /**
+   * OpenRouter `reasoning` control, forwarded as-is and only when set. Reasoning
+   * tokens count against `maxTokens`, so a reasoning model can spend the whole
+   * budget before it writes any answer. Ignored by providers other than OpenRouter.
+   */
+  reasoning?: {
+    enabled?: boolean;
+    effort?: 'low' | 'medium' | 'high';
+    max_tokens?: number;
+    exclude?: boolean;
+  };
 }
 
 export interface StructuredResult<T> {
@@ -216,6 +235,19 @@ export interface GitClient {
    * repo has no clone.
    */
   listFiles(repo: RepoRef): Promise<string[]>;
+  /**
+   * Per-file touch counts over the newest `maxCommits` commits reachable from HEAD,
+   * read from the LOCAL clone only (no network). `commits` is the number of commits
+   * counted after excluding shallow-boundary commits (a boundary commit lists every
+   * file as added, so it carries no signal). `byPath` maps a repo-relative path to
+   * the number of counted commits that touched it. Merge commits list no files
+   * (`--name-only` shows none), so a merge contributes 0 touches but still counts
+   * toward `commits`. A depth-1 clone therefore yields `{ commits: 0, byPath: {} }`.
+   */
+  countFileCommits(
+    repo: RepoRef,
+    maxCommits: number,
+  ): Promise<{ commits: number; byPath: Record<string, number> }>;
   /** Resolves `ref` to a full commit sha (`git rev-parse --verify <ref>^{commit}`). Rejects when unknown. */
   resolveRef(repo: RepoRef, ref: string): Promise<string>;
   clonePathFor(repo: RepoRef): string;

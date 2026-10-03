@@ -92,10 +92,9 @@ export const fileFacts = pgTable(
 // `file_rank` and `repo_map_cache` land in their own migration (0005) — they
 // depend on the dependency-cruiser graph + PageRank + token-budget work.
 //
-// DECISION (Option B): rank = pagerank,
-// hotness is always 0 in v1 (the clone is shallow; no churn window). The
-// `hotness` column stays so hotness can be switched on later WITHOUT a schema
-// change — `rank` would then become `pagerank * (1 + hotness)`.
+// rank = pagerank * (1 + hotness) since INDEXER_VERSION 3; hotness is the
+// normalised touch count over the newest 50 commits of the clone (0 when the
+// clone has no usable history).
 
 /**
  * Per-file importance rank. PK = (repoId, filePath). Written by pipeline/rank.ts
@@ -110,8 +109,8 @@ export const fileRank = pgTable(
       .references(() => repos.id, { onDelete: 'cascade' }),
     filePath: text('file_path').notNull(),
     pagerank: doublePrecision('pagerank').notNull(),
-    hotness: doublePrecision('hotness').notNull(), // always 0 under Option B
-    rank: doublePrecision('rank').notNull(), // = pagerank under Option B
+    hotness: doublePrecision('hotness').notNull(), // 0..1, touches / max touches
+    rank: doublePrecision('rank').notNull(), // = pagerank * (1 + hotness)
     percentile: smallint('percentile').notNull(),
   },
   (t) => ({

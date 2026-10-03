@@ -7,7 +7,8 @@
 
 import React from "react";
 import { useParams } from "next/navigation";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useRelativeTime } from "@/lib/relative-time";
 import { Button, EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { ContextDocPreview } from "@/components/context-selection";
@@ -19,7 +20,7 @@ import { s } from "./styles";
 
 export function ProjectContextView() {
   const t = useTranslations("context");
-  const format = useFormatter();
+  const relativeTime = useRelativeTime();
   const { repoId } = useParams<{ repoId: string }>();
   const { activeRepo } = useActiveRepo();
   const { data, isLoading, isError, refetch } = useContextFiles(repoId);
@@ -107,7 +108,7 @@ export function ProjectContextView() {
             <div style={s.footer}>
               {t("footer", {
                 count: data.count,
-                time: format.relativeTime(new Date(data.scanned_at)),
+                time: relativeTime(data.scanned_at),
               })}
             </div>
           </>

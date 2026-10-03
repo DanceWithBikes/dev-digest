@@ -9,7 +9,7 @@ import {
   TEST_QUALITY_REVIEWER_PROMPT,
   API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
-import { FIXTURE_PRS } from './seed-fixtures.js';
+import { FIXTURE_PRS, PR_482_BRIEF } from './seed-fixtures.js';
 import { buildSeedSkills, RETIRED_SKILL_NAMES } from './seed-skills.js';
 
 /** Default provider/model for the built-in reviewer agents. */
@@ -187,6 +187,13 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         confidence: 0.86,
       },
     ]);
+  }
+
+  // Cached PR Brief for #482. Own existence check (by pr_id), so dev DBs seeded
+  // before the brief existed get it too; never overwrites a regenerated brief.
+  const [existingBrief] = await db.select().from(t.prBrief).where(eq(t.prBrief.prId, pr!.id));
+  if (!existingBrief) {
+    await db.insert(t.prBrief).values({ prId: pr!.id, json: PR_482_BRIEF });
   }
 
   // ---- built-in agents (the three starter presets) ----

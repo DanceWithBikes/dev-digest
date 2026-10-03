@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RepoRef } from '@devdigest/shared';
 import { collectContextPaths } from '../src/modules/reviews/helpers.js';
-import { GitContextDocReader } from '../src/modules/reviews/compose.js';
+import { GitContextDocReader } from '../src/modules/_shared/context-doc-reader.js';
 import type { Container } from '../src/platform/container.js';
 
 const REPO: RepoRef = { owner: 'o', name: 'r' };

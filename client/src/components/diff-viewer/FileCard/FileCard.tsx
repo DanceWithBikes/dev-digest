@@ -35,15 +35,25 @@ export function FileCard({
   file,
   commenting,
   findings,
+  isTarget,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
   findings?: DiffFindingApi;
+  /** This file is the deep-link target: start open and scroll into view. */
+  isTarget?: boolean;
 }) {
   const t = useTranslations("shell");
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    !!isTarget || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  // The target can change while mounted (a second focus item): re-open and re-scroll.
+  React.useEffect(() => {
+    if (!isTarget) return;
+    setOpen(true);
+    rootRef.current?.scrollIntoView({ block: "start" });
+  }, [isTarget]);
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
 
   // Keys every rendered line can host a thread/finding on — shared by both
@@ -83,7 +93,7 @@ export function FileCard({
   }, [fileFindings, renderedKeys]);
 
   return (
-    <div style={s.fileCard}>
+    <div ref={rootRef} style={s.fileCard} data-file-path={file.path} data-open={open}>
       <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />

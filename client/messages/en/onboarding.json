@@ -1,17 +1,75 @@
 {
   "title": "Onboarding Tour",
-  "sections": "Sections",
-  "sectionCount": "{count} sections",
+  "pageTitle": "Onboarding for {name}",
+  "header": {
+    "generatedFrom": "Generated from index of {count} files · last refreshed {time}",
+    "partial": "Indexed {indexed} of {candidates} source files · last refreshed {time}",
+    "model": "Model: {model}",
+    "cost": "Cost: {cost}",
+    "costUnknown": "cost unknown",
+    "noModelCall": "no model call"
+  },
+  "toc": {
+    "title": "On this page",
+    "aria": "Sections of the onboarding tour"
+  },
+  "sections": {
+    "architecture": "Architecture overview",
+    "critical-paths": "Critical paths",
+    "run-locally": "How to run locally",
+    "reading-path": "Guided reading path",
+    "first-tasks": "First tasks"
+  },
+  "outline": "Outline · no AI",
   "regenerate": "Regenerate",
-  "regenerating": "Regenerating…",
+  "generating": "Generating…",
+  "share": "Share link",
+  "linkCopied": "Link copied",
+  "copy": "Copy",
+  "copyCommand": "Copy command {n}",
+  "open": "Open",
+  "openFile": "Open {path} on GitHub",
+  "riskyMarker": "Review before running",
   "unknownError": "Unknown error",
+  "banner": {
+    "stale": "Out of date — the index has moved past the commit this tour was built from.",
+    "timeout": "Generation is taking longer than expected. Reload to check again.",
+    "lastFailed": "The last regeneration failed {time} — showing the previous tour.",
+    "modelsLink": "Open Feature Models settings",
+    "status": {
+      "index_partial": "Partial index: some source files were left out, so rankings may miss parts of the repository.",
+      "unsupported_language": "This repository's language isn't indexed, so critical paths and the reading path are unavailable.",
+      "no_data": "No index for this repository yet — showing an outline built without AI.",
+      "index_failed": "The repository index failed — showing an outline built without AI.",
+      "llm_not_configured": "No API key is configured for the Onboarding Tour model — showing an outline built without AI.",
+      "llm_failed": "The AI write-up failed — showing an outline built without AI.",
+      "timed_out": "Generation timed out — showing an outline built without AI."
+    }
+  },
+  "notice": {
+    "unsupportedLanguage": "Not available for this repository's language.",
+    "noTasks": "First tasks need the AI write-up — regenerate once it is available."
+  },
+  "architecture": {
+    "directories": "Directories",
+    "fileCount": "{count, plural, one {# file} other {# files}}",
+    "diagramLabel": "Architecture diagram",
+    "diagramEmpty": "No diagram is available for this tour.",
+    "edgeLabel": "{from} depends on {to} ({weight})"
+  },
+  "runLocally": {
+    "source": "from {path}",
+    "empty": "No run commands were found in this repository."
+  },
   "generate": {
     "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
+    "body": "DevDigest indexes the repo and writes a guided tour: architecture, critical paths, how to run, a reading order, and first tasks. Takes 30–60s and ~5,000 tokens.",
     "cta": "Generate onboarding tour",
     "generating": "Generating…"
   },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"
-  }
+  },
+  "generateError": "Couldn’t start the generation: {message}",
+  "copied": "Copied"
 }

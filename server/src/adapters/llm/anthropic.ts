@@ -42,8 +42,9 @@ export class AnthropicProvider implements LLMProvider {
   readonly id = 'anthropic' as const;
   private client: Anthropic;
 
-  constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+  /** `baseURL` is a test seam (a local fake server); the default is Anthropic's. */
+  constructor(apiKey: string, opts: { baseURL?: string } = {}) {
+    this.client = new Anthropic({ apiKey, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) });
   }
 
   async listModels(): Promise<ModelInfo[]> {
@@ -89,7 +90,8 @@ export class AnthropicProvider implements LLMProvider {
   async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     const jsonSchema = toJsonSchema(req.schema, req.schemaName);
     const toolName = req.schemaName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const maxRetries = req.maxRetries ?? 2;
+    const maxRetries = req.singleAttempt ? 0 : (req.maxRetries ?? 2);
+    const timeoutMs = req.timeoutMs ?? DEFAULT_TIMEOUT;
     const { system, rest } = splitSystem(req.messages);
     const messages: Anthropic.MessageParam[] = [...rest];
     let tokensIn = 0;
@@ -97,9 +99,9 @@ export class AnthropicProvider implements LLMProvider {
     let lastRaw = '';
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      const res = await withRetry(() =>
-        withTimeout(
-          this.client.messages.create({
+      const create = (opts?: { maxRetries: number; signal: AbortSignal }) =>
+        this.client.messages.create(
+          {
             model: req.model,
             system: system || undefined,
             messages,
@@ -113,10 +115,12 @@ export class AnthropicProvider implements LLMProvider {
               },
             ],
             tool_choice: { type: 'tool', name: toolName },
-          }),
-          req.timeoutMs ?? DEFAULT_TIMEOUT,
-        ),
-      );
+          },
+          opts,
+        );
+      const res = req.singleAttempt
+        ? await create({ maxRetries: 0, signal: AbortSignal.timeout(timeoutMs) })
+        : await withRetry(() => withTimeout(create(), timeoutMs));
       tokensIn += res.usage.input_tokens;
       tokensOut += res.usage.output_tokens;
 

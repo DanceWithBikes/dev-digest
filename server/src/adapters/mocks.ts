@@ -263,6 +263,10 @@ export interface MockGitOptions {
   head?: string;
   /** Head `currentHead()` returns AFTER `sync()` runs — simulates fetch+reset advancing HEAD. */
   syncedHead?: string;
+  /** Simulate a repo with no clone on disk: `listFiles` rejects. */
+  noClone?: boolean;
+  /** Fixture for `countFileCommits` (defaults to no history). */
+  fileCommitCounts?: { commits: number; byPath: Record<string, number> };
 }
 
 export class MockGitClient implements GitClient {
@@ -318,6 +322,17 @@ export class MockGitClient implements GitClient {
    */
   async readFileAt(repo: RepoRef, _ref: string, path: string): Promise<string> {
     return this.readFile(repo, path);
+  }
+  /** The fixture map's keys; rejects when `noClone` simulates a missing clone. */
+  async listFiles(_repo: RepoRef): Promise<string[]> {
+    if (this.opts.noClone) throw new Error('mock: repo has no clone');
+    return Object.keys(this.opts.files ?? {});
+  }
+  async resolveRef(_repo: RepoRef, _ref: string): Promise<string> {
+    return this.opts.head ?? 'a1b2c3d4';
+  }
+  async countFileCommits(): Promise<{ commits: number; byPath: Record<string, number> }> {
+    return this.opts.fileCommitCounts ?? { commits: 0, byPath: {} };
   }
 }
 

@@ -1,10 +1,9 @@
 /**
  * repo-intel pipeline — file ranking (step 6, T3).
  *
- * DECISION (Option B): `rank = pagerank`,
- * `hotness = 0`. The clone is shallow (`CLONE_DEPTH = 1`) so there's no churn
- * window; rather than deepen the clone we drop hotness from v1. The `hotness`
- * column stays at 0 so it can be switched on later without a schema change.
+ * `rank = pagerank * (1 + hotness)`, where hotness (0..1) comes from the commit
+ * touches in the 50-commit resync window (see hotness.ts). With no hotness
+ * (shallow clone, or the argument omitted) rank equals pagerank.
  *
  * Graph: nodes are indexed files; a directed edge `importer → imported` per
  * `file_edges` row. PageRank then accrues to depended-upon ("foundational")
@@ -25,6 +24,7 @@ import type { IndexerEdgeRow, IndexerFileRankRow } from '../repository.js';
 export function computeFileRank(
   files: string[],
   edges: IndexerEdgeRow[],
+  hotness?: Map<string, number>,
 ): IndexerFileRankRow[] {
   if (files.length === 0) return [];
 
@@ -48,7 +48,8 @@ export function computeFileRank(
 
   const base = files.map((f) => {
     const score = pr[f] ?? 0;
-    return { filePath: f, pagerank: score, hotness: 0, rank: score };
+    const hot = hotness?.get(f) ?? 0;
+    return { filePath: f, pagerank: score, hotness: hot, rank: score * (1 + hot) };
   });
 
   // Percentile via "share of files with rank ≤ this rank" so ties share a

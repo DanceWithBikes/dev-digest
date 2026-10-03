@@ -35,8 +35,13 @@ export const MAX_CALLERS_PER_SYMBOL = 20;
  *
  * v2 (T3): graph + decl_file resolution + file_rank + repo-map landed, so every
  * T2 `partial` index must be rebuilt to gain the rank-driven data.
+ *
+ * v3 (SPEC-02): rank = pagerank * (1 + hotness) and the walk stats are persisted
+ * on the incremental path. Rank is skipped on the incremental early returns and
+ * on a soft budget, so only a version mismatch (full reindex) gives every
+ * existing repo hotness.
  */
-export const INDEXER_VERSION = 2;
+export const INDEXER_VERSION = 3;
 
 // --- [T2] Full-index limits (documented now, enforced in the pipeline) ------
 export const MAX_INDEXED_FILES = 5000;
@@ -47,7 +52,8 @@ export const INDEX_SOFT_BUDGET_MS = 110_000;
 
 // --- [T3] Graph / hotness / repo-map ---------------------------------------
 export const BFS_DEPTH = 2;
-export const HOTNESS_WINDOW_DAYS = 180;
+/** Hotness window: the newest N commits of the local clone (matches the resync fetch depth). */
+export const HOTNESS_MAX_COMMITS = 50;
 export const DEFAULT_REPO_MAP_TOKEN_BUDGET = 1500;
 /** Signatures are trimmed to this many chars in the parse phase (cache stability). */
 export const MAX_SIGNATURE_CHARS = 120;

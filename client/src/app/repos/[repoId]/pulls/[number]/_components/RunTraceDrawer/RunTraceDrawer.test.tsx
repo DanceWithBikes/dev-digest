@@ -143,3 +143,69 @@ describe("A5 Run Trace drawer — findings", () => {
     expect(screen.getByText("Extract the magic number")).toBeInTheDocument();
   });
 });
+
+describe("Run Trace drawer — project context documents", () => {
+  const SPEC_TEXT = "# Spec\n**bold** stays literal";
+  const withDocs = (): RunTrace => ({
+    ...TRACE,
+    prompt_assembly: { ...TRACE.prompt_assembly, specs: "GENERIC SPECS BLOCK" },
+    context_docs: [
+      { path: "docs/spec.md", origin: "agent", version: "abc1234", status: "sent", tokens: 42, text: SPEC_TEXT },
+      { path: "docs/gone.md", origin: "skill: Rubric", version: "", status: "not_found", tokens: 0, text: null },
+    ],
+  });
+
+  it("renders without the entry when the trace has no context_docs", () => {
+    state.trace = { ...TRACE, prompt_assembly: { ...TRACE.prompt_assembly, specs: "GENERIC" } };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    expect(screen.queryByText("Project context · attached specs")).not.toBeInTheDocument();
+    expect(screen.getByText("Project context (dynamic)")).toBeInTheDocument();
+  });
+
+  it("shows sent and not-found documents and hides the generic specs block", () => {
+    state.trace = withDocs();
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    expect(screen.getByText("Project context · attached specs")).toBeInTheDocument();
+    expect(screen.queryByText("Project context (dynamic)")).not.toBeInTheDocument();
+    expect(screen.getByText("docs/spec.md")).toBeInTheDocument();
+    expect(screen.getByText(/abc1234/)).toBeInTheDocument();
+    expect(screen.getByText("~42 tokens")).toBeInTheDocument();
+    expect(screen.getByText("not found")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Open docs\// })).toHaveLength(1);
+  });
+
+  it("opens a sent document's recorded text as plain, unrendered text", () => {
+    state.trace = withDocs();
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    fireEvent.click(screen.getByRole("button", { name: "Open docs/spec.md" }));
+    const pre = document.querySelector("pre");
+    expect(pre?.textContent).toBe(SPEC_TEXT);
+    expect(document.querySelector("strong")).toBeNull();
+  });
+
+  it("keeps the document opener a native, focusable button that opens the text (NFR-3)", () => {
+    state.trace = withDocs();
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    fireEvent.click(screen.getByText("Prompt assembly"));
+    const opener = screen.getByRole("button", { name: "Open docs/spec.md" });
+    // jsdom does no native key activation: native <button> + tab order is the keyboard contract.
+    expect(opener.tagName).toBe("BUTTON");
+    expect(opener.tabIndex).toBeGreaterThanOrEqual(0);
+    expect(opener).toBeEnabled();
+    opener.focus();
+    expect(opener).toHaveFocus();
+    fireEvent.click(opener);
+    expect(document.querySelector("pre")?.textContent).toBe(SPEC_TEXT);
+  });
+
+  it("lists the run's specs_read paths in the Configuration section (AC-66)", () => {
+    state.trace = { ...TRACE, specs_read: ["docs/spec.md", "docs/adr-1.md"] };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(screen.getByText("Specs read")).toBeInTheDocument();
+    expect(screen.getByText("docs/spec.md")).toBeInTheDocument();
+    expect(screen.getByText("docs/adr-1.md")).toBeInTheDocument();
+  });
+});

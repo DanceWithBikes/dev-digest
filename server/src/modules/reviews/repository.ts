@@ -24,6 +24,7 @@ export type ReviewRow = typeof t.reviews.$inferSelect;
 import * as reviewRepo from './repository/review.repo.js';
 import * as runRepo from './repository/run.repo.js';
 import * as pullRepo from './repository/pull.repo.js';
+import * as contextRepo from './repository/context.repo.js';
 
 export class ReviewRepository {
   constructor(private db: Db) {}
@@ -217,5 +218,15 @@ export class ReviewRepository {
 
   getRunTrace(runId: string): Promise<RunTrace | undefined> {
     return runRepo.getRunTrace(this.db, runId);
+  }
+
+  /** Project Context paths attached to an agent and its skills for one repo. */
+  contextAttachmentsFor(
+    workspaceId: string,
+    agentId: string,
+    skillIds: string[],
+    repoId: string,
+  ): Promise<{ agentPaths: string[]; skillPaths: Map<string, string[]> }> {
+    return contextRepo.contextAttachmentsFor(this.db, workspaceId, agentId, skillIds, repoId);
   }
 }

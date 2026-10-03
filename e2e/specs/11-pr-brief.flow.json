@@ -1,0 +1,24 @@
+{
+  "name": "PR Brief: the seeded cached brief renders on Overview, and a Review focus item opens its file (SPEC-03 AC-81, AC-82)",
+  "description": "From the PR list open seeded PR #482 (Overview is the default tab) and confirm the brief cached by the server seed (PR_482_BRIEF in server/src/db/seed-fixtures.ts) renders: the 'PR Brief' section label, the summary, the Risk areas list with its first risk title, and the Review focus list - and that no 'Generate brief' button is shown (AC-81). Then click the first Review focus item, 'src/config.ts:12', and confirm the Files changed tab is shown (tab=diff), the URL carries that file as the target (file=src%2Fconfig.ts) and that file's card is expanded (data-open is true) (AC-82). Read-only seeded data; no model call, no chat. Casing: SectionLabel applies text-transform: uppercase and `wait --text` reads innerText, so those waits use the rendered 'PR BRIEF' / 'RISK AREAS' / 'REVIEW FOCUS' (e2e/docs/insights.md). The list defaults to the 'needs review' filter, so the 'All' tab is clicked first (a reviewed #482 is hidden otherwise). The focus-item click uses --exact on the accessible name: the first Risk area chip is also a button whose name merely contains 'src/config.ts:12' and a substring match would toggle that chip instead. The row click keeps --exact (the next-intl blob in a <script> tag can match a non-exact text locator). The page scrolls inside <main>, so the review-focus list is scrolled into view with --selector main first. Needs the seeded brief on #482: a dev DB where someone regenerated it still passes the AC-81 text checks only if the summary was kept, so use e2e:hermetic.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "All", "click", "--exact"], "label": "show every status (the list defaults to 'needs review', which hides a reviewed #482)" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click", "--exact"], "label": "open PR #482 from its row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail and brief data settle" },
+    { "cmd": ["wait", "--text", "PR BRIEF"], "label": "AC-81: the PR Brief section label renders (uppercased by CSS)" },
+    { "cmd": ["wait", "--text", "Adds token-bucket rate limiting to the public API endpoints"], "label": "AC-81: the seeded brief summary renders" },
+    { "cmd": ["wait", "--text", "RISK AREAS"], "label": "AC-81: the Risk areas list heading renders (uppercased by CSS)" },
+    { "cmd": ["wait", "--text", "Hardcoded Stripe secret key"], "label": "AC-81: the first seeded risk title renders" },
+    { "cmd": ["scroll", "down", "700", "--selector", "main"], "label": "scroll the Review focus list into view (the page scrolls inside main)" },
+    { "cmd": ["wait", "--text", "REVIEW FOCUS"], "label": "AC-81: the Review focus list heading renders (uppercased by CSS)" },
+    { "cmd": ["wait", "--text", "Committed live Stripe secret key"], "label": "AC-81: the first Review focus reason renders" },
+    { "cmd": ["eval", "!document.body.innerText.includes('Generate brief')"], "label": "AC-81: no 'Generate brief' button when a brief is cached", "assert": { "stdoutIncludes": "true" } },
+    { "cmd": ["find", "role", "button", "click", "--name", "src/config.ts:12", "--exact"], "label": "AC-82: click the first Review focus item" },
+    { "cmd": ["wait", "--url", "tab=diff"], "label": "AC-82: the Files changed tab is shown" },
+    { "cmd": ["wait", "--url", "file=src%2Fconfig.ts"], "label": "AC-82: the URL carries the item's file as the target" },
+    { "cmd": ["eval", "document.querySelector('[data-file-path=\"src/config.ts\"]')?.getAttribute('data-open')"], "label": "AC-82: the target file card is expanded", "assert": { "stdoutIncludes": "true" } }
+  ]
+}

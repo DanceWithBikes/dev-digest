@@ -4,7 +4,7 @@
    @devdigest/ui. */
 "use client";
 
-import React from "react";
+import React, { type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Card, SectionLabel, Button, EmptyState, Skeleton, Icon } from "@devdigest/ui";
 import { usePrIntent, useDetectPrIntent } from "../../../../../../../lib/hooks/reviews";
@@ -13,10 +13,13 @@ import { s } from "./styles";
 export function IntentCard({
   prId,
   headSha,
+  footer,
 }: {
   prId: string | null;
   /** The PR's current head sha — compared to the stored intent's to flag it stale. */
   headSha?: string | null;
+  /** Rendered at the bottom of the card, empty or loaded (PR Brief Risk areas). */
+  footer?: ReactNode;
 }) {
   const t = useTranslations("prReview");
   const { data: intent, isLoading } = usePrIntent(prId);
@@ -48,6 +51,7 @@ export function IntentCard({
           onCta={handleDetect}
           ctaLoading={detect.isPending}
         />
+        {footer}
       </Card>
     );
   }
@@ -149,6 +153,8 @@ export function IntentCard({
           <span>{t("intent.noSpecLinked")}</span>
         </div>
       )}
+
+      {footer}
     </Card>
   );
 }

@@ -672,6 +672,30 @@ export class RepoIntelService implements RepoIntel {
     return out;
   }
 
+  async readIndexState(repoId: string): Promise<IndexState | null> {
+    if (!this.container.config.repoIntelEnabled) return null;
+    return this.repo.readIndexState(repoId);
+  }
+
+  async getRankedFiles(repoId: string): Promise<Array<{ path: string; rank: number }>> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    return this.repo.getRankedPaths(repoId, 100_000);
+  }
+
+  async getImportEdges(repoId: string): Promise<Array<{ from: string; to: string }>> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    const edges = await this.repo.getEdges(repoId);
+    return edges
+      .map((e) => ({ from: e.fromFile, to: e.toFile }))
+      .sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0));
+  }
+
+  async getEndpoints(repoId: string): Promise<Array<{ file: string; endpoint: string }>> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    const rows = await this.repo.getAllFileEndpoints(repoId);
+    return rows.flatMap((r) => r.endpoints.map((endpoint) => ({ file: r.file, endpoint })));
+  }
+
   /**
    * Dependency chains from the highest-ranked files (onboarding reading-path).
    * For each of the top roots, greedily follow the highest-ranked import target
@@ -703,7 +727,7 @@ export class RepoIntelService implements RepoIntel {
       for (let depth = 0; depth < BFS_DEPTH; depth += 1) {
         const next = (adj.get(cur) ?? [])
           .filter((t) => !inChain.has(t))
-          .sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0))[0];
+          .sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0) || (a < b ? -1 : a > b ? 1 : 0))[0];
         if (!next) break;
         chain.push(next);
         inChain.add(next);

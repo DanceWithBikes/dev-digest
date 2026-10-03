@@ -59,3 +59,36 @@ describe("VerdictBanner (smoke)", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 });
+
+describe("VerdictBanner (PR Brief header: null verdict, slots)", () => {
+  it("null verdict hides label, counts and score but still shows summary, even with a score given (AC-59)", () => {
+    renderWithIntl(
+      <VerdictBanner verdict={null} summary="Brief summary" score={77} findingsCount={4} blockers={2} />,
+    );
+    expect(screen.getByText("Brief summary")).toBeInTheDocument();
+    expect(screen.queryByText(/findings/)).not.toBeInTheDocument();
+    expect(screen.queryByText("77")).not.toBeInTheDocument();
+    expect(screen.queryByText("PR SCORE")).not.toBeInTheDocument();
+  });
+
+  it("renders the meta and actions slots; actions show without a score", () => {
+    renderWithIntl(
+      <VerdictBanner
+        verdict={null}
+        summary={null}
+        score={null}
+        findingsCount={0}
+        blockers={0}
+        meta={<span>meta slot</span>}
+        actions={<button type="button">act</button>}
+      />,
+    );
+    expect(screen.getByText("meta slot")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "act" })).toBeInTheDocument();
+  });
+
+  it("omits the actions column when neither actions nor a score exist", () => {
+    renderWithIntl(<VerdictBanner verdict="approve" summary={null} score={null} findingsCount={0} blockers={0} />);
+    expect(screen.queryByText("PR SCORE")).not.toBeInTheDocument();
+  });
+});

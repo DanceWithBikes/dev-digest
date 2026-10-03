@@ -120,6 +120,20 @@
       "when": 1790285852169,
       "tag": "0016_perfect_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790860718098,
+      "tag": "0017_lush_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790983533546,
+      "tag": "0018_legal_sentinels",
+      "breakpoints": true
     }
   ]
 }

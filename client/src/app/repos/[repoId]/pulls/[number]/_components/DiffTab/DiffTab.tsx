@@ -22,9 +22,11 @@ interface DiffTabProps {
   /** owner/repo + head sha — used to deep-link a finding's file:line to GitHub. */
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Path from `?file=` — opened and scrolled into view. */
+  targetFile?: string | null;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment, repoFullName, headSha }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, files, canComment, repoFullName, headSha, targetFile }: DiffTabProps) {
   const t = useTranslations("prReview");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
@@ -184,12 +186,17 @@ export function DiffTab({ prId, filesCount, files, canComment, repoFullName, hea
           )}
           {smartDiff.groups.map((group) => (
             <DiffGroup key={group.role} group={group} pathsWithFindings={pathsWithFindings}>
-              <DiffViewer files={toPrFiles(group, files)} commenting={commenting} findings={findings} />
+              <DiffViewer
+                files={toPrFiles(group, files)}
+                commenting={commenting}
+                findings={findings}
+                targetPath={targetFile}
+              />
             </DiffGroup>
           ))}
         </div>
       ) : (
-        <DiffViewer files={files} commenting={commenting} findings={findings} />
+        <DiffViewer files={files} commenting={commenting} findings={findings} targetPath={targetFile} />
       )}
     </section>
   );

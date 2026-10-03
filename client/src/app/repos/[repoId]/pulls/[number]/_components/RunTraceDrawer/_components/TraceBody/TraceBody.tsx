@@ -14,11 +14,13 @@ import { TraceSection } from "../TraceSection";
 import { ToolCallRow } from "../ToolCallRow";
 import { PromptBlock } from "../PromptBlock";
 import { FindingsSection } from "../FindingsSection";
+import { AttachedDocs } from "../AttachedDocs";
 import { Row, Stat } from "../atoms";
 
 export function TraceBody({ trace, findings }: { trace: RunTrace; findings: FindingRecord[] }) {
   const t = useTranslations("runs");
   const stats = trace.stats;
+  const hasContextDocs = (trace.context_docs?.length ?? 0) > 0;
   return (
     <>
       <TraceSection icon="Settings" title={t("trace.configuration")}>
@@ -92,7 +94,10 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
         {trace.prompt_assembly.repo_map != null && (
           <PromptBlock label={t("trace.prompt.repoMap")} text={trace.prompt_assembly.repo_map} color={PROMPT_COLORS.repoMap} />
         )}
-        {trace.prompt_assembly.specs != null && (
+        {/* Attached documents replace the generic specs block: they are the same
+            text, but per document, with origin and version. */}
+        {hasContextDocs && <AttachedDocs docs={trace.context_docs ?? []} />}
+        {!hasContextDocs && trace.prompt_assembly.specs != null && (
           <PromptBlock label={t("trace.prompt.specs")} text={trace.prompt_assembly.specs} color={PROMPT_COLORS.specs} />
         )}
         {trace.prompt_assembly.callers != null && (

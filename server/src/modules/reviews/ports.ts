@@ -113,3 +113,24 @@ export interface ClassifyResult {
 export interface IntentClassifier {
   classify(workspaceId: string, sources: GatheredIntentSources): Promise<ClassifyResult>;
 }
+
+/** The PR facts a document read needs — a structural subset of `PullRow`. */
+export interface PrForContext {
+  number: number;
+  headSha: string;
+}
+
+/** One document read: its text and the version it came from (a SHA or `working-tree`). */
+export interface ContextDocRead {
+  text: string;
+  version: string;
+}
+
+/**
+ * Reads attached Project Context documents for a run. Best-effort per path:
+ * a path that no reachable ref has is simply absent from the result. Never
+ * throws for a read failure.
+ */
+export interface ContextDocReader {
+  readAll(repo: RepoRef, pr: PrForContext, paths: string[]): Promise<Map<string, ContextDocRead>>;
+}

@@ -67,12 +67,16 @@ export type BlastRadius = z.infer<typeof BlastRadius>;
 export const RiskSeverity = z.enum(['high', 'medium', 'low']);
 export type RiskSeverity = z.infer<typeof RiskSeverity>;
 
+/** `path` or `path:line` or `path:start-end` (1-based). The path part holds no `:`. */
+export const RiskFileRef = z.string().regex(/^[^:]+(?::[1-9]\d*(?:-[1-9]\d*)?)?$/);
+export type RiskFileRef = z.infer<typeof RiskFileRef>;
+
 export const Risk = z.object({
   kind: z.string(),
   title: z.string(),
   explanation: z.string(),
   severity: RiskSeverity,
-  file_refs: z.array(z.string()),
+  file_refs: z.array(RiskFileRef),
 });
 export type Risk = z.infer<typeof Risk>;
 
@@ -133,11 +137,42 @@ export const SmartDiff = z.object({
 });
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
+// ---- Review focus ----
+export const ReviewFocusItem = z.object({
+  file: z.string().min(1),
+  line: z.number().int().min(1),
+  reason: z.string().min(1),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+// ---- Missing data ----
+export const BriefMissingSource = z.enum(['intent', 'blast', 'specs', 'diff']);
+export type BriefMissingSource = z.infer<typeof BriefMissingSource>;
+
+export const BriefMissing = z.object({
+  source: BriefMissingSource,
+  reason: z.string().min(1),
+});
+export type BriefMissing = z.infer<typeof BriefMissing>;
+
 // ---- Composed PR Brief (pr_brief.json) ----
 export const PrBrief = z.object({
-  intent: Intent,
-  blast: BlastRadius,
+  summary: z.string(),
+  intent: Intent.nullable(),
+  blast: BlastRadius.nullable(),
   risks: Risks,
   history: PrHistory,
+  review_focus: z.array(ReviewFocusItem),
+  missing: z.array(BriefMissing),
+  head_sha: z.string(),
+  generated_at: z.string(),
+  model: z.string(),
+  cost_usd: z.number().nullable(),
+  tokens_in: z.number().int().nullable(),
+  tokens_out: z.number().int().nullable(),
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+/** `GET /pulls/:id/brief`: the stored brief, or null when none was generated. */
+export const PrBriefResponse = PrBrief.nullable();
+export type PrBriefResponse = z.infer<typeof PrBriefResponse>;

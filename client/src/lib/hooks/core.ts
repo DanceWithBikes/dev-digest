@@ -16,8 +16,6 @@ import type {
   PrMeta,
   PrDetail,
   SmartDiff,
-  SpecFile,
-  IndexStatus,
 } from "../types";
 
 // ---- Settings (F1: GET/PUT /settings, POST /settings/test-connection) ----
@@ -140,22 +138,5 @@ export function useGenerateSummaries(prId: string | number | null | undefined) {
   return useMutation({
     mutationFn: () => api.post<SmartDiff>(`/pulls/${prId}/smart-diff/summaries`),
     onSuccess: (data) => qc.setQueryData(["smart-diff", prId], data),
-  });
-}
-
-// ---- Project Context (A3 contract; safe to call once API exposes it) ----
-export function useContextFiles(repoId: string | null | undefined) {
-  return useQuery({
-    queryKey: ["context", repoId],
-    queryFn: () => api.get<SpecFile[]>(`/repos/${repoId}/context`),
-    enabled: !!repoId,
-  });
-}
-
-export function useReindexContext() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (repoId: string) => api.post<IndexStatus>(`/repos/${repoId}/context/reindex`),
-    onSuccess: (_d, repoId) => qc.invalidateQueries({ queryKey: ["context", repoId] }),
   });
 }

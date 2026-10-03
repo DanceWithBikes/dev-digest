@@ -1,0 +1,14 @@
+{
+  "name": "PR Brief: a PR with no stored brief offers 'Generate brief' (SPEC-03 AC-83)",
+  "description": "From the PR list open seeded PR #483 ('Add coupon discount calculation + tests'), which has no stored brief, and confirm the Overview tab shows the 'PR Brief' section (uppercased by CSS, so 'PR BRIEF' for `wait --text`) with a 'Generate brief' button (AC-83). The flow never clicks the button: generating needs a model call, which e2e flows never make, and a generation stored on #483 in a dev DB would break this flow outside e2e:hermetic (e2e/docs/insights.md). Read-only seeded data; no chat. The row click keeps --exact (the next-intl blob in a <script> tag can match a non-exact text locator).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "All", "click", "--exact"], "label": "show every status (the list defaults to 'needs review')" },
+    { "cmd": ["find", "text", "Add coupon discount calculation + tests", "click", "--exact"], "label": "open PR #483 from its row" },
+    { "cmd": ["wait", "--url", "/pulls/483"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail and brief data settle" },
+    { "cmd": ["wait", "--text", "PR BRIEF"], "label": "AC-83: the PR Brief section renders (uppercased by CSS)" },
+    { "cmd": ["wait", "--text", "Generate brief"], "label": "AC-83: the 'Generate brief' button renders" }
+  ]
+}

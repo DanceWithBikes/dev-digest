@@ -38,6 +38,7 @@ import type { IndexResult, IndexStatus } from '../types.js';
 import { runFullIndex, type IndexPayload } from './full.js';
 import { walkClone } from './walk.js';
 import { computeFileRank } from './rank.js';
+import { computeHotness, loadFileCommitCounts, NO_COMMIT_COUNTS } from './hotness.js';
 import { renderRepoMap } from './repo-map.js';
 
 /**
@@ -214,14 +215,23 @@ export async function runIncremental(
   // v1 favours simple correctness.
   let graphFailed: string | undefined;
   let edgeRows: IndexerEdgeRow[] = [];
+  let commitCounts = NO_COMMIT_COUNTS;
+  let walkStats: Record<string, unknown> = {};
   try {
-    const allFiles = (await walkClone(repo.clonePath)).files;
+    const walked = await walkClone(repo.clonePath);
+    const allFiles = walked.files;
+    walkStats = { ...walked.stats };
     const edges = await container.depgraph.buildEdges(repo.clonePath, allFiles);
     edgeRows = edges.map((e) => ({ fromFile: e.from, toFile: e.to }));
     await repository.replaceEdges(repoId, edgeRows);
     // reset: a changed decl-file can invalidate a prior resolution.
     await repository.resolveReferences(repoId, { reset: true });
-    const rankRows = computeFileRank(allFiles, edgeRows);
+    commitCounts = await loadFileCommitCounts(container.git, ref);
+    const rankRows = computeFileRank(
+      allFiles,
+      edgeRows,
+      computeHotness(allFiles, commitCounts.byPath),
+    );
     await repository.replaceFileRank(repoId, rankRows);
     // The repo-map is keyed per commit_sha → prior entries are now stale.
     const candidates = await repository.getRepoMapCandidates(repoId);
@@ -243,12 +253,14 @@ export async function runIncremental(
   const status: IndexStatus = clean && state.status === 'full' ? 'full' : 'partial';
 
   const stats: Record<string, unknown> = {
+    ...walkStats,
     incremental: true,
     changedFiles: changed.length,
     symbolsWritten: symbolsBuf.length,
     referencesWritten: refsBuf.length,
     edgesWritten: edgeRows.length,
-    hotnessAvailable: false,
+    hotnessAvailable: commitCounts.commits > 0,
+    hotnessCommits: commitCounts.commits,
     ...(graphFailed ? { graphFailed } : {}),
     parseDegraded,
     durationMs: Date.now() - startedAt,

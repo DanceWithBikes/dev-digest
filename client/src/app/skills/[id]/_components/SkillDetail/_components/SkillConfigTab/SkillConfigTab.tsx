@@ -7,6 +7,8 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
+import { ContextSelectionPanel } from "@/components/context-selection";
+import { useActiveRepo } from "@/lib/repo-context";
 import type { Skill } from "@devdigest/shared";
 import { useToast } from "../../../../../../../lib/toast";
 import { useUpdateSkill } from "../../../../../../../lib/hooks/skills";
@@ -22,6 +24,8 @@ export function SkillConfigTab({ skill }: { skill: Skill }) {
   const t = useTranslations("skills");
   const toast = useToast();
   const update = useUpdateSkill();
+  const { activeRepo } = useActiveRepo();
+  const [pickedRepo, setPickedRepo] = React.useState<string | null>(null);
 
   const [draft, setDraft] = React.useState<SkillFormValue>(() => toSkillFormValue(skill));
 
@@ -55,6 +59,17 @@ export function SkillConfigTab({ skill }: { skill: Skill }) {
           {update.isPending ? t("preview.saving") : t("preview.save")}
         </Button>
       </div>
+      {/* Its own Save: attachments are stored apart from the skill body. */}
+      <section style={s.contextSection}>
+        <h2 style={s.contextTitle}>{t("context.title")}</h2>
+        <p style={s.contextHint}>{t("context.subtitle")}</p>
+        <ContextSelectionPanel
+          ownerKind="skill"
+          ownerId={skill.id}
+          repoId={pickedRepo ?? activeRepo?.id ?? null}
+          onRepoChange={setPickedRepo}
+        />
+      </section>
     </div>
   );
 }

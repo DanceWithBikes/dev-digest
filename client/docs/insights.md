@@ -41,6 +41,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `src/components/findings-summary/helpers.ts:43` (pair-only emphasis regex in `plainText`, declared at `:37`), `src/components/findings-summary/helpers.test.ts:61` (the pinning test)
 
 ## Codebase Patterns
+- **2026-10-05 · `VerdictBanner` is shared by the Agent runs banner and the PR Brief header, and it hides a zero blockers count** — With `blockers === 0` it renders no blockers text at all, not "0 blockers". A spec that says a header "shows the blockers count" is therefore only Partially met (SPEC-03 AC-58 had to be amended and AC-86 added). Changing that guard changes both screens. Write criteria as "blockers count when non-zero", or add a brief-only prop.
+  Where: `src/app/repos/[repoId]/pulls/[number]/_components/VerdictBanner/VerdictBanner.tsx:53` (`blockers > 0 ?`)
+
 - **2026-10-03 · The inline-style `styles.ts` convention cannot express media queries, so responsive stacking uses CSS grid `auto-fit`** — To get two columns that stack on narrow screens, use `gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, <N>px), 1fr))"`. The cards then stack when the container is narrower than 2×N, which depends on the container width rather than a viewport breakpoint like `lg`. The `min(100%, …)` keeps one card from overflowing a column narrower than N.
   Where: `src/app/repos/[repoId]/pulls/[number]/_components/OverviewTab/styles.ts:8` (`twoCol`)
 

@@ -27,8 +27,8 @@ The server package owns the server copy of the brief contract (AC-1 to AC-8) and
 
 ### Seed data
 
-- [x] AC-84 The server seed shall store a brief for seeded PR #482 in `acme/payments-api`. That brief shall validate against the `PrBrief` contract and have a non-empty summary, at least 1 risk, and at least 1 review focus item whose file is a changed file of that PR. Its head SHA shall equal that PR's seeded head SHA. — `server/src/db/seed-fixtures.ts:132` (`PR_482_BRIEF`), `server/src/db/seed.ts:194` (`seed (brief insert)`) · test: `server/test/brief.it.test.ts:351` ("seed() run again leaves exactly one PR #482 brief; a regenerated brief survives a re-seed; GET #482 timing is recorded")
-- [x] AC-85 The server seed shall insert the PR #482 brief only when that PR has no stored brief, so re-running the seed never adds a second brief or replaces a regenerated one. — `server/src/db/seed.ts:194` (`seed (existingBrief check)`) · test: `server/test/brief.it.test.ts:351` ("seed() run again leaves exactly one PR #482 brief; a regenerated brief survives a re-seed; GET #482 timing is recorded")
+- [x] AC-84 The server seed shall store a brief for seeded PR #482 in `acme/payments-api`. That brief shall validate against the `PrBrief` contract and have a non-empty summary, at least 1 risk, and at least 1 review focus item whose file is a changed file of that PR. Its head SHA shall equal that PR's seeded head SHA. — `server/src/db/seed-fixtures.ts:132` (`PR_482_BRIEF`), `server/src/db/seed.ts:194` (`seed (brief insert)`) · test: `server/test/brief.it.test.ts:352` ("seed() run again leaves exactly one PR #482 brief; a regenerated brief survives a re-seed; GET #482 timing is recorded")
+- [x] AC-85 The server seed shall insert the PR #482 brief only when that PR has no stored brief, so re-running the seed never adds a second brief or replaces a regenerated one. — `server/src/db/seed.ts:194` (`seed (existingBrief check)`) · test: `server/test/brief.it.test.ts:352` ("seed() run again leaves exactly one PR #482 brief; a regenerated brief survives a re-seed; GET #482 timing is recorded")
 
 ## Module notes
 
@@ -40,4 +40,4 @@ The server package owns the server copy of the brief contract (AC-1 to AC-8) and
 ## Open questions
 
 - AC-8 is met but untested: the two contract files are identical on 2026-10-03 (`diff` clean) and no parity test exists.
-- AC-84 and AC-85 are covered by a Docker-gated integration test that is skipped when Docker is unavailable: `server/test/brief.it.test.ts:26`. It asserts that GET returns the seeded brief equal to `PR_482_BRIEF`, that a re-seed leaves one row, and that a regenerated brief survives a re-seed (`server/test/brief.it.test.ts:351`). "Its focus file is a changed file of the PR" is not asserted by a test; e2e flow 11 exercises it (`e2e/specs/11-pr-brief.flow.json:19-22`).
+- AC-84 and AC-85 are covered by a Docker-gated integration test that is skipped when Docker is unavailable: `server/test/brief.it.test.ts:26`. It asserts that GET returns the seeded brief equal to `PR_482_BRIEF`, that a re-seed leaves one row, and that a regenerated brief survives a re-seed (`server/test/brief.it.test.ts:352`). "Its focus file is a changed file of the PR" is not asserted by a test; e2e flow 11 exercises it (`e2e/specs/11-pr-brief.flow.json:19-22`).

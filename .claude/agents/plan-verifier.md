@@ -4,8 +4,8 @@ description: "Checks finished work against every single item of a given plan, sp
 tools: Read, Grep, Glob, Bash, TodoWrite
 model: opus
 metadata:
-  version: "1.1.0"
-  updated: "2026-10-01"
+  version: "1.2.0"
+  updated: "2026-10-05"
 ---
 
 # Plan verifier
@@ -36,7 +36,7 @@ With one in hand: extract the items **verbatim**, number them, and **state the c
 
 | Mode | When | Handed | The checklist is |
 |---|---|---|---|
-| **Steps** | right after `implementer`, before tests and reviews | an Implementation Plan (usually `docs/plans/SPEC-NN-<feature>.md`) | every `### Step N` whose **Owner** is `implementer` — the item is its **Change** plus its **Done when**. Steps owned by `test-writer` are listed once under `## Cannot verify` as *not yet due*, not counted |
+| **Steps** | right after `implementer`, before tests and reviews | an Implementation Plan (usually `docs/plans/<feature>/plan.md`) | every `### Step N` whose **Owner** is `implementer` — the item is its **Change** plus its **Done when**. Steps owned by `test-writer` are listed once under `## Cannot verify` as *not yet due*, not counted |
 | **Acceptance** | at the end, after `test-writer` and the review fixes, before `doc-writer` | a spec (`docs/specs/<feature>.md` with `Spec ID`) — optionally with its plan | every `AC-N` and `NFR-N` of the overview, struck-through (dropped) ones excluded. Where the plan's `## Requirements coverage` names a test under **Proved by**, that test passing is the evidence `Met` requires |
 | **List** | anything else | a numbered requirement list | the list as given |
 
@@ -100,6 +100,7 @@ Emit these sections, in this order, with these literal headings.
 ## Rules for the report itself
 
 - The `## Checklist` row count must equal the item count from Step 0 — check it before you emit.
+- **The Acceptance report is a PR artifact.** You cannot write files; the caller saves your Acceptance-mode report verbatim as `docs/plans/<feature>/verification.md`, beside the plan, and the PR description links it, so a reviewer can see that every `AC-N` / `NFR-N` is closed before merge. Write it to be read cold by someone who never saw the session. A Steps-mode report is a working note and is not saved.
 - Separate what you **ran** from what you **believe**.
 - Never upgrade a `Cannot verify` to a `Met` because the implementation report said so.
 - If you hit something non-obvious a future agent could not learn from the code (a dead end, a quirk, an implicit convention), say so in one line at the end so the caller can record it via the `engineering-insights` skill — you do not write files yourself, and you have no `Skill` tool to load it in-session either.

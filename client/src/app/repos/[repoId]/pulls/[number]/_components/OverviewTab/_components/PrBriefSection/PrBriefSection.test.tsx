@@ -106,6 +106,17 @@ describe("PrBriefSection (with brief)", () => {
     expect(screen.queryByText(/Stale/)).not.toBeInTheDocument();
   });
 
+  it("header omits the blockers count when the newest completed review has 0 blockers (AC-58, AC-86)", () => {
+    renderSection({
+      brief: makeBrief(),
+      review: { verdict: "approve", findingsCount: 3, blockers: 0, score: 88 },
+    });
+    expect(screen.getByText("Approve")).toBeInTheDocument();
+    expect(screen.getByText("3 findings")).toBeInTheDocument();
+    expect(screen.getByText("88")).toBeInTheDocument();
+    expect(screen.queryByText(/blocker/i)).not.toBeInTheDocument();
+  });
+
   it("without a completed review no verdict, counts or score show (AC-59)", () => {
     renderSection({ brief: makeBrief(), review: null });
     expect(screen.queryByText("Request changes")).not.toBeInTheDocument();

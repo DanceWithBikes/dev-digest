@@ -48,8 +48,9 @@ export class OpenAIProvider implements LLMProvider {
   readonly id = 'openai' as const;
   private client: OpenAI;
 
-  constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+  /** `baseURL` is a test seam (a local fake server); the default is OpenAI's. */
+  constructor(apiKey: string, opts: { baseURL?: string } = {}) {
+    this.client = new OpenAI({ apiKey, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) });
   }
 
   async listModels(): Promise<ModelInfo[]> {
@@ -87,16 +88,17 @@ export class OpenAIProvider implements LLMProvider {
 
   async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     const jsonSchema = toJsonSchema(req.schema, req.schemaName);
-    const maxRetries = req.maxRetries ?? 2;
+    const maxRetries = req.singleAttempt ? 0 : (req.maxRetries ?? 2);
+    const timeoutMs = req.timeoutMs ?? DEFAULT_TIMEOUT;
     const messages = [...req.messages];
     let tokensIn = 0;
     let tokensOut = 0;
     let lastRaw = '';
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-      const res = await withRetry(() =>
-        withTimeout(
-          this.client.chat.completions.create({
+      const create = (opts?: { maxRetries: number; signal: AbortSignal }) =>
+        this.client.chat.completions.create(
+          {
             model: req.model,
             messages,
             ...tuningParams(req.model, req.temperature, req.maxTokens),
@@ -104,10 +106,12 @@ export class OpenAIProvider implements LLMProvider {
               type: 'json_schema',
               json_schema: { name: req.schemaName, schema: jsonSchema.schema, strict: true },
             },
-          }),
-          req.timeoutMs ?? DEFAULT_TIMEOUT,
-        ),
-      );
+          },
+          opts,
+        );
+      const res = req.singleAttempt
+        ? await create({ maxRetries: 0, signal: AbortSignal.timeout(timeoutMs) })
+        : await withRetry(() => withTimeout(create(), timeoutMs));
       lastRaw = res.choices?.[0]?.message?.content ?? '';
       tokensIn += res.usage?.prompt_tokens ?? 0;
       tokensOut += res.usage?.completion_tokens ?? 0;

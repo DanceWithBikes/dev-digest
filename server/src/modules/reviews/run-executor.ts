@@ -1,22 +1,33 @@
 import type { Container } from '../../platform/container.js';
-import type { PrIntentRecord, Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
-import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
+import type { AttachedContextDoc, PrIntentRecord, Provider, RepoRef, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import {
+  reviewPullRequest,
+  countBlockers,
+  escapeUntrustedContent,
+  type ProjectContextDoc,
+} from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { CHARS_PER_TOKEN, REVIEW_STRATEGY } from './constants.js';
-import { selectSkillBodies, taskLine } from './helpers.js';
+import { collectContextPaths, selectSkillBodies, taskLine, type LinkedSkill } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { bodyFingerprint, deriveMissingContext, isIntentStale } from './intent-helpers.js';
 import { renderCommitsDigest, renderFilesDigest, renderIntentForPrompt } from './intent-sources.js';
 import type {
   ClassifyResult,
+  ContextDocReader,
   GatheredIntentSources,
   IntentClassifier,
   IntentSourceCollector,
   PrForIntent,
 } from './ports.js';
+
+/** Paths of the documents a run actually sent, in prompt order (`specs_read`). */
+function sentPaths(entries: AttachedContextDoc[]): string[] {
+  return entries.filter((e) => e.status === 'sent').map((e) => e.path);
+}
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -59,6 +70,9 @@ export class ReviewRunExecutor {
     // application-ring class: the executor only calls the ports, never
     // `container.llm()`/`container.featureModel()` directly.
     private intent: { collector: IntentSourceCollector; classifier: IntentClassifier },
+    // Project Context — reads attached documents off the clone; injected for the
+    // same reason as `intent` (the git I/O stays out of this application class).
+    private contextReader: ContextDocReader,
   ) {}
 
   /**
@@ -193,6 +207,8 @@ export class ReviewRunExecutor {
     // Captured outside the try so a failure AFTER assembly still shows the
     // skills the run actually sent, rather than an empty block.
     let skillsForTrace: string | null = null;
+    // Same for the Project Context entries: a failed run keeps what it read.
+    let contextForTrace: AttachedContextDoc[] = [];
 
     runLog.info(`Starting review with agent "${agent.name}" (${agent.provider}/${agent.model})`);
 
@@ -228,8 +244,14 @@ export class ReviewRunExecutor {
       const task = taskLine(pull) + rankNote;
 
       // The agent's configured skills — the `## Skills / rules` prompt section.
-      const skills = await this.buildSkillBodies(agent.id, runLog);
+      const links = await this.agents.linkedSkills(agent.id);
+      const skills = this.buildSkillBodies(links, runLog);
       skillsForTrace = skills.length > 0 ? skills.join('\n\n') : null;
+
+      // Project Context — the documents attached to the agent and its skills
+      // for THIS PR's repo: the `## Project context` prompt section + trace.
+      const projectContext = await this.buildProjectContext(workspaceId, agent.id, links, pull, repo, runLog);
+      contextForTrace = projectContext.entries;
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
@@ -246,6 +268,9 @@ export class ReviewRunExecutor {
         // L02 — the agent's attached, enabled skills. Same omit-when-empty
         // contract: an agent with no skills produces the pre-L02 prompt exactly.
         ...(skills.length > 0 ? { skills } : {}),
+        // Project Context — same omit-when-empty contract: no documents → the
+        // pre-feature prompt, byte for byte.
+        ...(projectContext.docs.length > 0 ? { specs: projectContext.docs } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -335,7 +360,8 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        specs_read: sentPaths(contextForTrace),
+        ...(contextForTrace.length > 0 ? { context_docs: contextForTrace } : {}),
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
@@ -364,7 +390,7 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, skillsForTrace))
+        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, skillsForTrace, contextForTrace))
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
@@ -530,8 +556,7 @@ export class ReviewRunExecutor {
    * is exactly the confusion this feature exists to remove. Let it throw into
    * the per-agent catch, which records the run as failed with the reason.
    */
-  private async buildSkillBodies(agentId: string, runLog: RunLogger): Promise<string[]> {
-    const links = await this.agents.linkedSkills(agentId);
+  private buildSkillBodies(links: LinkedSkill[], runLog: RunLogger): string[] {
     const bodies = selectSkillBodies(links);
     const skipped = links.length - bodies.length;
     const approxTokens = Math.ceil(bodies.join('\n\n').length / CHARS_PER_TOKEN);
@@ -542,6 +567,69 @@ export class ReviewRunExecutor {
         (skipped > 0 ? ` — ${skipped} skipped (disabled globally)` : ''),
     );
     return bodies;
+  }
+
+  /**
+   * The documents attached to the agent and its enabled skills for this PR's
+   * repo, read and ready for the `## Project context` slot. Like skills (and
+   * unlike the repo-intel digests) a DB error is NOT caught — it fails the run
+   * with a reason. A document that cannot be read is NOT an error: it becomes a
+   * `not_found` entry and a log line, and the run goes on. Document text is
+   * never logged.
+   */
+  private async buildProjectContext(
+    workspaceId: string,
+    agentId: string,
+    links: (LinkedSkill & { skill: { id: string } })[],
+    pull: PullRow,
+    repo: RepoRef,
+    runLog: RunLogger,
+  ): Promise<{ docs: ProjectContextDoc[]; entries: AttachedContextDoc[] }> {
+    const attached = await this.repo.contextAttachmentsFor(
+      workspaceId,
+      agentId,
+      links.map((l) => l.skill.id),
+      pull.repoId,
+    );
+    const planned = collectContextPaths(
+      attached.agentPaths,
+      links.map((l) => ({ skill: l.skill, paths: attached.skillPaths.get(l.skill.id) ?? [] })),
+    );
+    if (planned.length === 0) return { docs: [], entries: [] };
+
+    const read = await this.contextReader
+      .readAll(
+        repo,
+        { number: pull.number, headSha: pull.headSha },
+        planned.map((p) => p.path),
+      )
+      .catch(() => new Map());
+
+    const docs: ProjectContextDoc[] = [];
+    const entries: AttachedContextDoc[] = [];
+    let tokens = 0;
+    for (const { path, origin } of planned) {
+      const hit = read.get(path);
+      if (!hit) {
+        runLog.info(`${path} not found — skipped`);
+        entries.push({ path, origin, version: '', status: 'not_found', tokens: 0, text: null });
+        continue;
+      }
+      const docTokens = Math.ceil(hit.text.length / CHARS_PER_TOKEN);
+      tokens += docTokens;
+      docs.push({ path, text: hit.text });
+      entries.push({
+        path,
+        origin,
+        version: hit.version,
+        status: 'sent',
+        tokens: docTokens,
+        // The exact bytes between this document's delimiters (reviewer-core escapes with the same function).
+        text: escapeUntrustedContent(hit.text),
+      });
+    }
+    if (docs.length > 0) runLog.info(`project context: ${docs.length} document(s) sent (~${tokens} tokens)`);
+    return { docs, entries };
   }
 
   private async buildCallersDigest(
@@ -632,6 +720,7 @@ export class ReviewRunExecutor {
     grounding: string,
     durationMs = 0,
     skills: string | null = null,
+    contextDocs: AttachedContextDoc[] = [],
   ): RunTrace {
     return {
       config: {
@@ -647,7 +736,8 @@ export class ReviewRunExecutor {
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],
-      specs_read: [],
+      specs_read: sentPaths(contextDocs),
+      ...(contextDocs.length > 0 ? { context_docs: contextDocs } : {}),
       log: this.container.runBus.buffer(runId).map((e) => ({ t: e.t, kind: e.kind, msg: e.msg })),
     };
   }

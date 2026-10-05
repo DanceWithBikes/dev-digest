@@ -5,9 +5,18 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## What Works
 
+- **2026-10-01 · Prove "prompt unchanged when the new slot is empty" against HEAD, not against itself** — A test comparing `assemblePrompt(base)` with `assemblePrompt({...base, slot: []})` passes even if the refactor changed BOTH outputs. Quick real check: `git show HEAD:reviewer-core/src/prompt.ts > src/__old_prompt.ts`, import both `assemblePrompt`s in a throwaway `npx tsx` script, `JSON.stringify`-compare on a few no-slot inputs, then delete the temp file. Done for SPEC-01 AC-37 (3/3 identical).
+  Where: `src/prompt.ts:136` (`assemblePrompt`)
+
 ## What Doesn't Work
 
 ## Codebase Patterns
+
+- **2026-10-01 · Never extend `INJECTION_GUARD` for a feature-specific rule — it is appended to EVERY system message** — Any wording change in the guard alters every prompt, including runs where the feature's slot is empty, which breaks the "prompt is byte-identical when the optional slot is absent" guarantee (SPEC-01 AC-37) and every snapshot built on it. Instead: add a separate trusted constant appended only when its slot is present, like `SCOPE_INSTRUCTION` for intent.
+  Where: `src/prompt.ts:111` (system message assembly), `src/prompt.ts:16` (`INJECTION_GUARD`), `src/prompt.ts:35` (`SCOPE_INSTRUCTION`)
+
+- **2026-10-01 · `wrapUntrusted` escapes the content but NOT the `label`** — The content has `</untrusted>` neutralised, but `label` is interpolated raw into `source="${label}"`. Today every caller passes a constant label (`spec-i`, `pr-description`, …), so it is safe. Any label derived from repo data (e.g. a Project Context file path, SPEC-01 AC-36) can close the attribute/tag and inject trusted-looking text. Escape or whitelist the label before passing anything non-constant.
+  Where: `src/prompt.ts:44` (`wrapUntrusted`)
 
 - **2026-09-24 · This package's purity is enforced by the SERVER's `arch:check`, not by anything in here — `npm run typecheck && npm test` proves nothing about I/O** — `reviewer-core` has no `arch:check` script and no `.dependency-cruiser.cjs` of its own (`package.json` scripts are exactly `typecheck`, `build`, `test`). The two rules that make the "no I/O, index-only" invariants real — `reviewer-core-has-no-io` and `reviewer-core-only-through-its-index` — live in `server/.dependency-cruiser.cjs:165` and `:157`, and they see this package only because the server's cruise follows its tsconfig `paths` alias into `../reviewer-core/src/**`. Two consequences: (a) a green `npm test` here is NOT evidence that a new file is pure — you must run `cd server && pnpm arch:check`; (b) a `reviewer-core` file that nothing in the server's import graph reaches is **silently unchecked**, so a new engine module should be exported from `index.ts` and reached by the server (directly or transitively) before you trust the gate on it. Verified for L03's `src/intent/filter.ts`: it appears in the server's cruised module set, so the rules actually evaluated it.
   Where: `package.json:5` (scripts — no `arch:check`), `../server/.dependency-cruiser.cjs:165` (`reviewer-core-has-no-io`), `../server/.dependency-cruiser.cjs:157` (`reviewer-core-only-through-its-index`), `src/intent/filter.ts` (confirmed inside the cruised set)

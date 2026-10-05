@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { join } from 'node:path';
-import { mkdir, readFile, access, rm } from 'node:fs/promises';
+import { join, sep, resolve } from 'node:path';
+import { mkdir, readFile, access, rm, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
   GitClient,
@@ -126,8 +126,98 @@ export class SimpleGitClient implements GitClient {
     }));
   }
 
+  /**
+   * Working-tree read, contained to the clone: the path must be repo-relative
+   * with no `..` segment, and after resolving symlinks the target must still
+   * sit inside the clone (a committed symlink to `/etc/hosts` must not read).
+   */
   async readFile(repo: RepoRef, path: string): Promise<string> {
-    return readFile(join(this.clonePathFor(repo), path), 'utf8');
+    assertRelativePath(path);
+    assertNotGitDir(path);
+    const root = await realpath(this.clonePathFor(repo));
+    const target = await realpath(join(root, path));
+    if (!target.startsWith(root + sep)) throw new Error(`path escapes the clone: ${path}`);
+    // The resolved target may sit in `.git` via a symlink or a case-folded name.
+    assertNotGitDir(target.slice(root.length + 1));
+    return readFile(target, 'utf8');
+  }
+
+  /**
+   * Regular files tracked at HEAD. `-z` avoids git's quoting of unusual names;
+   * mode 120000 (symlink) and 160000 (submodule) entries are skipped. Everything
+   * in the index is tracked, so nothing under `.git/` can appear.
+   */
+  async listFiles(repo: RepoRef): Promise<string[]> {
+    const raw = await this.git(repo).raw(['ls-tree', '-r', '-z', '--full-tree', 'HEAD']);
+    const out: string[] = [];
+    for (const entry of raw.split('\0')) {
+      if (!entry) continue;
+      const tab = entry.indexOf('\t');
+      if (tab < 0) continue;
+      const mode = entry.slice(0, entry.indexOf(' '));
+      if (mode === '120000' || mode === '160000') continue;
+      out.push(entry.slice(tab + 1));
+    }
+    return out;
+  }
+
+  /**
+   * One `git log -n <max> --name-only -z` read over the local clone (no network).
+   * `core.quotepath=off` plus `-z` keep non-ASCII paths verbatim. Shallow-boundary
+   * commits (listed in the file `git rev-parse --git-path shallow` names) are
+   * excluded from both `commits` and `byPath`: git shows a boundary commit as a
+   * root that adds every file. `--name-only` lists nothing for merge commits, so a
+   * merge adds to `commits` but contributes 0 file touches.
+   */
+  async countFileCommits(
+    repo: RepoRef,
+    maxCommits: number,
+  ): Promise<{ commits: number; byPath: Record<string, number> }> {
+    const g = this.git(repo);
+    const boundary = await this.shallowBoundary(repo);
+    const raw = await g.raw([
+      '-c',
+      'core.quotepath=off',
+      'log',
+      '-n',
+      String(Math.max(0, Math.floor(maxCommits))),
+      '--name-only',
+      '-z',
+      '--format=%x01%H%x02',
+    ]);
+    const byPath: Record<string, number> = {};
+    let commits = 0;
+    for (const chunk of raw.split('\x01')) {
+      const end = chunk.indexOf('\x02');
+      if (end < 0) continue;
+      const sha = chunk.slice(0, end);
+      if (boundary.has(sha)) continue;
+      commits++;
+      const seen = new Set<string>();
+      for (const name of chunk.slice(end + 1).split('\0')) {
+        const path = name.replace(/^\n+/, '');
+        if (!path || seen.has(path)) continue;
+        seen.add(path);
+        byPath[path] = (byPath[path] ?? 0) + 1;
+      }
+    }
+    return { commits, byPath };
+  }
+
+  /** Shas in the clone's `shallow` file; empty when the clone is not shallow. */
+  private async shallowBoundary(repo: RepoRef): Promise<Set<string>> {
+    const out = (await this.git(repo).raw(['rev-parse', '--git-path', 'shallow'])).trim();
+    try {
+      const text = await readFile(resolve(this.clonePathFor(repo), out), 'utf8');
+      return new Set(text.split('\n').map((l) => l.trim()).filter(Boolean));
+    } catch {
+      return new Set();
+    }
+  }
+
+  async resolveRef(repo: RepoRef, ref: string): Promise<string> {
+    const sha = await this.git(repo).raw(['rev-parse', '--verify', `${ref}^{commit}`]);
+    return sha.trim();
   }
 
   /**
@@ -138,7 +228,29 @@ export class SimpleGitClient implements GitClient {
    * not exist there, which is how callers detect "fetch the PR head first".
    */
   async readFileAt(repo: RepoRef, ref: string, path: string): Promise<string> {
+    assertRelativePath(path);
     return this.git(repo).raw(['show', `${ref}:${path}`]);
+  }
+}
+
+/** Lexical guard shared by the two read paths: repo-relative, no `..` segment, no NUL. */
+function assertRelativePath(path: string): void {
+  if (
+    !path ||
+    path.includes('\0') ||
+    path.startsWith('/') ||
+    path.startsWith('\\') ||
+    /^[A-Za-z]:/.test(path) ||
+    path.split(/[\\/]/).includes('..')
+  ) {
+    throw new Error(`invalid repo-relative path: ${path}`);
+  }
+}
+
+/** The clone's `.git` holds the remote URL with its token: never readable as a file. */
+function assertNotGitDir(clonePath: string): void {
+  if (clonePath.split(/[\\/]/)[0]!.toLowerCase() === '.git') {
+    throw new Error(`path is inside .git: ${clonePath}`);
   }
 }
 

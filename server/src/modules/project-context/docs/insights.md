@@ -1,0 +1,12 @@
+# Insights — project-context
+
+Knowledge you can't see in the code. Newest entry on top of each section.
+Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
+
+## What Works
+
+## What Doesn't Work
+
+## Session Notes
+
+## Open Questions

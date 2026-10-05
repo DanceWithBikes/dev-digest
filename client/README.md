@@ -25,16 +25,24 @@ Routes (`src/app/**/page.tsx`) and the API surface each leans on (via
 flowchart TD
   ROOT["/"] -->|"useRepos → GET /repos"| PULLS["/repos/:repoId/pulls<br/>PR list"]
   ONB["/onboarding<br/>add repo"] -->|"POST /repos"| API[("Fastify API")]
-  PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
+  PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)<br/>?tab= · ?file= (Files changed target)"]
 
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config)"]
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
-  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
+  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>GET · POST /pulls/:id/brief<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   AGENTS -->|"/agents · /agents/:id"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
+
+On the PR detail route, the Overview tab opens with the **PR Brief** section
+(`OverviewTab/_components/PrBriefSection`): `usePrBrief` reads the stored brief
+(`GET /pulls/:id/brief`) and `useGeneratePrBrief` generates or regenerates it
+(`POST /pulls/:id/brief`), both in `src/lib/hooks/brief.ts`. A Review focus item on a
+changed file calls `openFile` in `page.tsx`, which writes `?tab=diff&file=<path>` in one
+`router.replace`; the Files changed tab expands and scrolls to that file, so a reload keeps
+the target, and switching tabs drops `file`. Spec: `../docs/specs/pr-brief.md`.
 
 Cross-cutting chrome lives in `src/components/app-shell` (nav, breadcrumbs,
 `g`-then-key shortcuts). Pages are thin; feature logic sits in colocated

@@ -1,0 +1,15 @@
+{
+  "name": "Onboarding Tour: empty state, then the no_data outline for the never-cloned seeded repo (SPEC-02 AC-104, AC-105)",
+  "description": "From the PR list, open 'Onboarding Tour' in the WORKSPACE sidebar group and confirm the page at /repos/<id>/onboarding shows the empty state titled 'Generate onboarding tour' (AC-104). Then click the 'Generate onboarding tour' button: the seeded repo acme/payments-api has no clone and no index (e2e/docs/insights.md), so the generation ends `no_data` WITHOUT any model call and the page shows the no_data banner sentence of AC-87 (AC-105). The URL wait is the per-repo pattern, never a bare '/onboarding', which is the add-repository screen (flow 06). The sidebar click keeps --exact because Next.js inlines the next-intl messages blob into a <script> tag that a non-exact `find text` can resolve to instead of the real link. Needs a freshly-seeded DB with no stored tour (use e2e:hermetic): a tour left in a dev DB would skip the empty state. Read-only apart from the one generation POST, which stores a skeleton row; no LLM, no API key.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the first repo's PR list" },
+    { "cmd": ["find", "text", "Onboarding Tour", "click", "--exact"], "label": "open Onboarding Tour from the WORKSPACE sidebar group" },
+    { "cmd": ["wait", "--url", "/onboarding"], "label": "navigate to the tour route (the empty-state check below rules out the add-repository screen)" },
+    { "cmd": ["wait", "--text", "Generate onboarding tour"], "label": "AC-104: the empty state titled 'Generate onboarding tour' renders" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Generate onboarding tour"], "label": "request the generation (the seeded repo has no clone, so no model is called)" },
+    { "cmd": ["wait", "--text", "No index for this repository yet — showing an outline built without AI."], "label": "AC-105: the no_data banner sentence renders" },
+    { "cmd": ["wait", "--text", "Onboarding for acme/payments-api"], "label": "the page title names the seeded repo" },
+    { "cmd": ["wait", "--text", "no model call"], "label": "the header states that no model call was made" }
+  ]
+}

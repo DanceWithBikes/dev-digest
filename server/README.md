@@ -71,6 +71,9 @@ flowchart TB
   subgraph Review["Review & runs"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
   end
+  subgraph Brief["PR Brief"]
+    brief["brief<br/>/pulls/:id/brief (GET stored · POST generate)"]
+  end
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id"]
   end
@@ -83,6 +86,14 @@ flowchart TB
   end
   HEALTH["/health (liveness) · /health/ready (DB ping → 200/503)"]
 ```
+
+`GET /pulls/:id/brief` returns the stored PR Brief or `null` and never calls a model;
+`POST /pulls/:id/brief` generates it synchronously (one structured model call, the
+`risk_brief` model from Settings) and replaces the stored one. Errors: 404 unknown PR,
+409 a brief for that PR is already being generated, 429 more than 5 POSTs a minute per
+workspace, and a server error when the model fails or 90 s pass (the stored brief is
+kept). Routes: `src/modules/brief/routes.ts:17`, `:26`; module rules:
+`src/modules/brief/AGENTS.md`; spec: `../docs/specs/pr-brief.md`.
 
 ## MCP server (stdio)
 

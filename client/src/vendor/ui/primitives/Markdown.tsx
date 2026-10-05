@@ -2,8 +2,18 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-/** Markdown renderer (replaces prototype mdLite). Inline + GFM. */
-export function Markdown({ children }: { children?: string | null }) {
+/**
+ * Markdown renderer (replaces prototype mdLite). Inline + GFM, no raw HTML.
+ * `isAllowedHref` is an optional link policy: a link it rejects renders its
+ * text without an anchor. Omitted = every link is kept (unchanged default).
+ */
+export function Markdown({
+  children,
+  isAllowedHref,
+}: {
+  children?: string | null;
+  isAllowedHref?: (href: string) => boolean;
+}) {
   if (!children) return null;
   return (
     <div className="dd-md" style={{ fontSize: "inherit", lineHeight: 1.55 }}>
@@ -28,11 +38,14 @@ export function Markdown({ children }: { children?: string | null }) {
               {children}
             </code>
           ),
-          a: ({ children, href }) => (
-            <a href={href} style={{ color: "var(--accent-text)", textDecoration: "underline" }}>
-              {children}
-            </a>
-          ),
+          a: ({ children, href }) =>
+            isAllowedHref && !(href && isAllowedHref(href)) ? (
+              <>{children}</>
+            ) : (
+              <a href={href} style={{ color: "var(--accent-text)", textDecoration: "underline" }}>
+                {children}
+              </a>
+            ),
         }}
       >
         {children}

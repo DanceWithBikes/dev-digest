@@ -204,38 +204,48 @@ export class RepoIntelRepository {
    */
   async tryGetIndexState(repoId: string): Promise<IndexState | null> {
     try {
-      const [row] = await this.db
-        .select()
-        .from(t.repoIndexState)
-        .where(eq(t.repoIndexState.repoId, repoId));
-      if (!row) return null;
-      const stats = (row.stats ?? {}) as Record<string, unknown>;
-      const durationMs = typeof stats.durationMs === 'number' ? stats.durationMs : 0;
-      const reason = typeof stats.reason === 'string' ? stats.reason : undefined;
-      // A persisted row is the "real" index state. We only mark it `degraded`
-      // when the indexer itself stamped status='degraded'|'failed' (e.g. the
-      // graph fell over). 'partial' is still a working index — no degraded flag.
-      const isDegraded = row.status === 'degraded' || row.status === 'failed';
-      return {
-        repoId,
-        status: row.status as IndexStatus,
-        filesIndexed: row.filesIndexed,
-        filesSkipped: row.filesSkipped,
-        durationMs,
-        reason,
-        lastIndexedSha: row.lastIndexedSha,
-        indexerVersion: row.indexerVersion,
-        updatedAt: row.updatedAt,
-        degraded: isDegraded ? true : undefined,
-        degradedReason: isDegraded
-          ? ((stats.degradedReason as DegradedReason | undefined) ?? 'index_failed')
-          : undefined,
-      };
+      return await this.readIndexState(repoId);
     } catch {
       // Table missing / schema drift / connection blip — degrade silently. The
       // facade always has a safe synthesised fallback.
       return null;
     }
+  }
+
+  /** Strict variant of `tryGetIndexState`: null only when no row exists; errors propagate. */
+  async readIndexState(repoId: string): Promise<IndexState | null> {
+    const [row] = await this.db
+      .select()
+      .from(t.repoIndexState)
+      .where(eq(t.repoIndexState.repoId, repoId));
+    if (!row) return null;
+    const stats = (row.stats ?? {}) as Record<string, unknown>;
+    const durationMs = typeof stats.durationMs === 'number' ? stats.durationMs : 0;
+    const reason = typeof stats.reason === 'string' ? stats.reason : undefined;
+    // A persisted row is the "real" index state. We only mark it `degraded`
+    // when the indexer itself stamped status='degraded'|'failed' (e.g. the
+    // graph fell over). 'partial' is still a working index — no degraded flag.
+    const isDegraded = row.status === 'degraded' || row.status === 'failed';
+    return {
+      repoId,
+      status: row.status as IndexStatus,
+      filesIndexed: row.filesIndexed,
+      filesSkipped: row.filesSkipped,
+      durationMs,
+      reason,
+      lastIndexedSha: row.lastIndexedSha,
+      indexerVersion: row.indexerVersion,
+      updatedAt: row.updatedAt,
+      degraded: isDegraded ? true : undefined,
+      degradedReason: isDegraded
+        ? ((stats.degradedReason as DegradedReason | undefined) ?? 'index_failed')
+        : undefined,
+      hotnessAvailable:
+        typeof stats.hotnessAvailable === 'boolean' ? stats.hotnessAvailable : undefined,
+      hotnessCommits: typeof stats.hotnessCommits === 'number' ? stats.hotnessCommits : undefined,
+      candidateFiles: typeof stats.totalCandidates === 'number' ? stats.totalCandidates : undefined,
+      boundedFiles: typeof stats.bounded === 'number' ? stats.bounded : undefined,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -454,8 +464,18 @@ export class RepoIntelRepository {
       .select({ path: t.fileRank.filePath, rank: t.fileRank.rank })
       .from(t.fileRank)
       .where(eq(t.fileRank.repoId, repoId))
-      .orderBy(desc(t.fileRank.rank))
+      .orderBy(desc(t.fileRank.rank), asc(t.fileRank.filePath))
       .limit(limit);
+  }
+
+  /** Endpoints per file for the whole repo, sorted by file path. */
+  async getAllFileEndpoints(repoId: string): Promise<Array<{ file: string; endpoints: string[] }>> {
+    const rows = await this.db
+      .select({ filePath: t.fileFacts.filePath, endpoints: t.fileFacts.endpoints })
+      .from(t.fileFacts)
+      .where(eq(t.fileFacts.repoId, repoId))
+      .orderBy(asc(t.fileFacts.filePath));
+    return rows.map((r) => ({ file: r.filePath, endpoints: (r.endpoints as string[]) ?? [] }));
   }
 
   /** Repo-map candidates: symbols with a signature, joined to rank, ordered. */

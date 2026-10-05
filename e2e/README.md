@@ -101,3 +101,6 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
 | `08-smart-diff` | PR #482 → Files changed tab → Smart Diff group header, collapse summary, Original order toggle |
+| `10-onboarding-tour` | sidebar → Onboarding Tour for the seeded repo → empty state; Generate → `no_data` banner, no model call |
+| `11-pr-brief` | PR #482 → Overview → seeded PR Brief renders (summary, Risk areas, Review focus), no Generate button; first Review focus item → Files changed with `file=` in the URL and the file expanded |
+| `12-pr-brief-empty` | PR #483 (no stored brief) → Overview → PR Brief section with a Generate brief button (never clicked) |

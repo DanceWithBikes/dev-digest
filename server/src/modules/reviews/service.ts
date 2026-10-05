@@ -8,7 +8,7 @@ import { ReviewRunExecutor, type Logger } from './run-executor.js';
 import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
-import { makeIntentEngine } from './compose.js';
+import { makeContextDocReader, makeIntentEngine } from './compose.js';
 import { bodyFingerprint, deriveMissingContext, isIntentStale } from './intent-helpers.js';
 import type { IntentClassifier, IntentSourceCollector, PrForIntent } from './ports.js';
 
@@ -44,7 +44,7 @@ export class ReviewService {
     this.intentClassifier = intent.classifier;
     // Injected, not pulled off the Container inside the executor — keeps the
     // LLM call out of the application ring (plan §4).
-    this.executor = new ReviewRunExecutor(container, this.repo, this.agents, intent);
+    this.executor = new ReviewRunExecutor(container, this.repo, this.agents, intent, makeContextDocReader(container));
   }
 
   // ===========================================================================

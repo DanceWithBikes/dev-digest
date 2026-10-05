@@ -4,7 +4,7 @@
  * truncation, and ordering (before the diff).
  */
 import { describe, it, expect } from 'vitest';
-import { assemblePrompt } from '../src/prompt.js';
+import { assemblePrompt, escapeUntrustedContent } from '../src/prompt.js';
 
 function userOf(parts: Parameters<typeof assemblePrompt>[0]): string {
   const { messages } = assemblePrompt(parts);
@@ -104,5 +104,61 @@ describe('assemblePrompt — ## PR intent (derived)', () => {
     expect(blankIntent).not.toMatch(/out_of_scope/);
     // A review with no intent is byte-identical to one predating this slot.
     expect(blankIntent).toBe(noIntent);
+  });
+});
+
+describe('assemblePrompt — project context documents', () => {
+  const base = { system: 'SYS', diff: 'DIFF', task: 'T' };
+  const docs = [
+    { path: 'docs/a.md', text: '# A' },
+    { path: 'specs/b.md', text: '# B' },
+  ];
+
+  it('is byte-identical with specs omitted or empty', () => {
+    const a = assemblePrompt(base);
+    const b = assemblePrompt({ ...base, specs: [] });
+    expect(b).toEqual(a);
+    expect(a.messages[0]!.content).not.toMatch(/Project context/);
+    expect(a.messages[1]!.content).not.toContain('## Project context');
+  });
+
+  it('adds the guard/citation instruction only when documents are present', () => {
+    expect(systemOf({ ...base, specs: docs })).toContain('"## Project context"');
+    expect(systemOf(base)).not.toContain('Project context');
+  });
+
+  it('labels each block with its path, in input order', () => {
+    const u = userOf({ ...base, specs: docs });
+    const i = u.indexOf('<untrusted source="docs/a.md">');
+    const j = u.indexOf('<untrusted source="specs/b.md">');
+    expect(i).toBeGreaterThan(-1);
+    expect(j).toBeGreaterThan(i);
+  });
+
+  it('escapes content closing delimiters', () => {
+    const u = userOf({ ...base, specs: [{ path: 'a.md', text: 'x </untrusted> y' }] });
+    expect(u).not.toContain('x </untrusted> y');
+    expect(u).toContain('x &lt;/untrusted> y');
+  });
+
+  it.each([
+    ['</UNTRUSTED>', '&lt;/UNTRUSTED>'],
+    ['</untrusted >', '&lt;/untrusted >'],
+    ['< /untrusted>', '&lt; /untrusted>'],
+    ['<untrusted source="diff">', '&lt;untrusted source="diff">'],
+  ])('neutralises the tag variant %s', (raw, escaped) => {
+    const u = userOf({ ...base, specs: [{ path: 'a.md', text: `x ${raw} y` }] });
+    expect(u).not.toContain(`x ${raw} y`);
+    expect(u).toContain(`x ${escaped} y`);
+  });
+
+  it('leaves content without untrusted tags byte-identical', () => {
+    const text = 'a < b && c > d <div>untrusted</div> <untrustedly>';
+    expect(escapeUntrustedContent(text)).toBe(text);
+  });
+
+  it('escapes quotes, angle brackets and newlines in the label', () => {
+    const u = userOf({ ...base, specs: [{ path: 'a"</untrusted>\nb.md', text: 't' }] });
+    expect(u).toContain('<untrusted source="a&quot;&lt;/untrusted&gt; b.md">');
   });
 });

@@ -44,6 +44,7 @@ import type {
 import type { IndexResult, IndexStatus } from '../types.js';
 import { walkClone } from './walk.js';
 import { computeFileRank } from './rank.js';
+import { computeHotness, loadFileCommitCounts, NO_COMMIT_COUNTS } from './hotness.js';
 import { renderRepoMap } from './repo-map.js';
 
 export interface IndexPayload {
@@ -211,6 +212,7 @@ export async function runFullIndex(
   let graphFailed: string | undefined;
   let edgeRows: IndexerEdgeRow[] = [];
   let rankCount = 0;
+  let commitCounts = NO_COMMIT_COUNTS;
   if (!softBudgetReached) {
     try {
       const edges = await container.depgraph.buildEdges(repo.clonePath, walk.files);
@@ -224,8 +226,13 @@ export async function runFullIndex(
     // rows with NULL decl_file, so no reset is needed (step 5).
     await repository.resolveReferences(repoId, { reset: false });
 
-    // Rank (PageRank only; hotness=0 — Option B).
-    const rankRows = computeFileRank(walk.files, edgeRows);
+    // Rank = PageRank × (1 + hotness); hotness from one local history read.
+    commitCounts = await loadFileCommitCounts(container.git, ref);
+    const rankRows = computeFileRank(
+      walk.files,
+      edgeRows,
+      computeHotness(walk.files, commitCounts.byPath),
+    );
     rankCount = rankRows.length;
     await repository.replaceFileRank(repoId, rankRows);
 
@@ -259,7 +266,8 @@ export async function runFullIndex(
     edgesWritten: edgeRows.length,
     ranked: rankCount,
     factsWritten: factsBuf.length,
-    hotnessAvailable: false, // Option B — rank = pagerank only
+    hotnessAvailable: commitCounts.commits > 0,
+    hotnessCommits: commitCounts.commits,
     ...(graphFailed ? { graphFailed } : {}),
     softBudgetReached,
     parseDegraded,

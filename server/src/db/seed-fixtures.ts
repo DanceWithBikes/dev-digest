@@ -12,6 +12,8 @@
  * a required query param and drops a response field.
  */
 
+import type { PrBrief } from '@devdigest/shared';
+
 export interface FixtureFile {
   path: string;
   additions: number;
@@ -121,3 +123,66 @@ export const PR_484_CONTRACT: FixturePr = {
 };
 
 export const FIXTURE_PRS: FixturePr[] = [PR_483_DISCOUNT, PR_484_CONTRACT];
+
+/**
+ * Cached PR Brief for seeded PR #482 (SPEC-03). Built on the seeded facts: the
+ * head SHA, the seven changed files and the sample review's two findings. The
+ * hermetic seed has no repo-intel index, so `no_data` is the honest blast state.
+ */
+export const PR_482_BRIEF: PrBrief = {
+  summary:
+    'Adds token-bucket rate limiting to the public API endpoints to stop abuse from unauthenticated clients. The limiter is wired in through a new middleware and a config entry, but a live Stripe secret key is committed in plaintext and the user-list endpoint now issues one query per user.',
+  intent: null,
+  blast: {
+    changed_symbols: [],
+    downstream: [],
+    summary: '0 symbols · 0 callers · 0 endpoints · 0 crons',
+    degraded: true,
+    reason: 'no_data',
+  },
+  risks: {
+    risks: [
+      {
+        kind: 'security',
+        title: 'Hardcoded Stripe secret key',
+        explanation:
+          'A literal live secret key is committed in the config. Anyone with read access to the repository can use it, so it must be rotated and moved to an environment variable.',
+        severity: 'high',
+        file_refs: ['src/config.ts:12'],
+      },
+      {
+        kind: 'performance',
+        title: 'N+1 query in the user list endpoint',
+        explanation:
+          'The handler issues one query per user. Under the new limiter this multiplies database load for every allowed request.',
+        severity: 'medium',
+        file_refs: ['src/api/users.ts:45-52'],
+      },
+      {
+        kind: 'correctness',
+        title: 'Limiter behaviour is untested',
+        explanation:
+          'The token-bucket middleware has no test for refill timing or for bursts at the limit, so regressions would go unnoticed.',
+        severity: 'low',
+        file_refs: ['src/middleware/ratelimit.ts'],
+      },
+    ],
+  },
+  history: { history: [] },
+  review_focus: [
+    { file: 'src/config.ts', line: 12, reason: 'Committed live Stripe secret key' },
+    { file: 'src/api/users.ts', line: 45, reason: 'Per-user query loop (N+1) under the new limiter' },
+    { file: 'src/middleware/ratelimit.ts', line: 1, reason: 'Core of the change: token-bucket refill and limits' },
+  ],
+  missing: [
+    { source: 'intent', reason: 'no intent derived for this PR' },
+    { source: 'blast', reason: 'blast radius degraded (no_data)' },
+    { source: 'specs', reason: 'no project context documents attached' },
+  ],
+  head_sha: 'a1b2c3d4e5f6',
+  generated_at: '2026-09-24T09:00:00.000Z',
+  model: 'seed',
+  cost_usd: null,
+  tokens_in: null,
+  tokens_out: null,
+};

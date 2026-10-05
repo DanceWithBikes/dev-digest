@@ -119,5 +119,9 @@
     "community": "Community",
     "imported_url": "Imported",
     "imported_file": "Imported file"
+  },
+  "context": {
+    "title": "Project context to use",
+    "subtitle": "Documents from a repo that are added to the prompt of every agent using this skill."
   }
 }

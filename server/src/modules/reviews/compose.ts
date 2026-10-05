@@ -1,11 +1,13 @@
 import type { RepoRef } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import type { ReviewRepository } from './repository.js';
+import { GitContextDocReader } from '../_shared/context-doc-reader.js';
 import { MAX_ISSUE_BODY_CHARS, MAX_SPEC_CHARS, INTENT_MAX_TOKENS, INTENT_TEMPERATURE } from './constants.js';
 import { parseIssueRef, parseSpecRef } from './intent-helpers.js';
 import { IntentSchema, SYSTEM_PROMPT, buildUserPrompt } from './intent-prompt.js';
 import type {
   ClassifyResult,
+  ContextDocReader,
   GatheredIntentSources,
   GatheredIssue,
   GatheredSpec,
@@ -190,4 +192,8 @@ export function makeIntentEngine(container: Container, repo: ReviewRepository): 
     collector: new RepoIntentSourceCollector(container, repo),
     classifier: new LlmIntentClassifier(container),
   };
+}
+
+export function makeContextDocReader(container: Container): ContextDocReader {
+  return new GitContextDocReader(container);
 }

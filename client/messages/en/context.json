@@ -1,24 +1,60 @@
 {
   "title": "Project Context",
-  "chunks": "{count} chunks",
+  "crumb": "Project Context",
   "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
+  "indexing": "Re-indexing…",
+  "loadError": "Couldn’t load project context",
+  "search": "Search documents…",
+  "tokens": "~{count} tokens",
+  "treeLabel": "Documents",
+  "selectPrompt": {
+    "title": "Select a document",
+    "body": "Pick a document on the left to preview it."
+  },
+  "usedBy": "Used by {agents, plural, one {# agent} other {# agents}} · {skills, plural, one {# skill} other {# skills}}",
+  "previewError": "Couldn’t load the document",
+  "previewLoading": "Loading…",
+  "noMatches": "No documents match “{q}”.",
+  "footer": "Indexed: {count} files · last scanned {time}",
+  "notCloned": "This repo has no local clone yet, so no documents can be listed.",
   "empty": {
     "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+    "body": "Documents are attached to agents and skills manually. Nothing under this repo’s search roots matches yet — adjust the search roots to point at your specs.",
+    "cta": "Edit search roots"
   },
-  "mode": {
-    "preview": "preview",
-    "edit": "edit"
-  },
-  "editor": {
-    "loadError": "Couldn’t load spec",
+  "roots": {
+    "title": "Search roots",
+    "hint": "One repo-relative folder or glob per line.",
+    "label": "Search roots",
+    "default": "Defaults in use",
     "save": "Save",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "edit": "Edit search roots",
+    "saveError": "Couldn’t save the search roots"
+  },
+  "type": {
+    "spec": "spec",
+    "insights": "insights",
+    "doc": "doc"
+  },
+  "picker": {
+    "repo": "Repository",
+    "search": "Search documents…",
+    "count": "{count} documents",
+    "noDocs": "No documents in this repo.",
+    "selectionTotal": "Selected: {count} documents · ~{tokens} tokens",
+    "promptEstimate": "Prompt will carry ~{tokens} tokens of project context for this repo",
+    "missing": "missing",
+    "preview": "Preview",
+    "closePreview": "Close preview",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveError": "Couldn’t save the selection",
+    "loadError": "Couldn’t load the documents",
+    "noMatches": "No documents match “{q}”.",
+    "previewOf": "Preview of {path}",
+    "check": "Attach {path}"
   }
 }

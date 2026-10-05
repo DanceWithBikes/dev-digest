@@ -16,10 +16,13 @@ export function DiffViewer({
   files,
   commenting,
   findings,
+  targetPath,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
   findings?: DiffFindingApi;
+  /** File to open and scroll into view (e.g. from a deep link). */
+  targetPath?: string | null;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -28,7 +31,13 @@ export function DiffViewer({
   return (
     <div style={s.list}>
       {files.map((f) => (
-        <FileCard key={f.path} file={f} commenting={commenting} findings={findings} />
+        <FileCard
+          key={f.path}
+          file={f}
+          commenting={commenting}
+          findings={findings}
+          isTarget={!!targetPath && f.path === targetPath}
+        />
       ))}
     </div>
   );

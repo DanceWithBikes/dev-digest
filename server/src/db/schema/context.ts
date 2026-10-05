@@ -117,10 +117,33 @@ export const references = pgTable(
   }),
 );
 
+/**
+ * Latest Onboarding Tour per repo. `status`, `commit_sha` and `last_failed_*`
+ * are authoritative; `json` holds the tour body and the mapper overrides the
+ * matching JSON fields with these columns.
+ */
 export const onboarding = pgTable('onboarding', {
   repoId: uuid('repo_id')
     .primaryKey()
     .references(() => repos.id, { onDelete: 'cascade' }),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
   json: jsonb('json').notNull(),
+  commitSha: text('commit_sha').notNull().default(''),
+  status: text('status', {
+    enum: [
+      'ready',
+      'index_partial',
+      'unsupported_language',
+      'no_data',
+      'index_failed',
+      'llm_not_configured',
+      'llm_failed',
+      'timed_out',
+    ],
+  }).notNull(),
+  lastFailedStatus: text('last_failed_status'),
+  lastFailedAt: timestamp('last_failed_at', { withTimezone: true }),
   generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
 });

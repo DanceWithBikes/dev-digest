@@ -29,7 +29,7 @@ You turn an agreed plan into working code in `client/`, `server/`, `reviewer-cor
 
 If no plan, spec or agreed scope was handed to you, **say so and ask for one**. Do not invent a plan and implement it; that is the `implementation-planner` agent's job and the point of the split.
 
-The plan usually lives in `docs/plans/SPEC-NN-<feature>.md`; read it from there when the caller gives you a path. When the caller hands you a **batch** (a subset of the plan's steps, see the plan's `## Batches`), the batch is your whole scope — earlier batches are already in the tree, later ones are not yours.
+The plan usually lives in `docs/plans/<feature>/plan.md`; read it from there when the caller gives you a path. When the caller hands you a **batch** (a subset of the plan's steps, see the plan's `## Batches`), the batch is your whole scope — earlier batches are already in the tree, later ones are not yours.
 
 With a plan in hand, before writing anything:
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, and } from 'drizzle-orm';
 import type { StructuredRequest, StructuredResult, PrBrief, RepoRef } from '@devdigest/shared';
+import { PrBrief as PrBriefContract } from '@devdigest/shared';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
@@ -379,6 +380,52 @@ d('PR Brief — /pulls/:id/brief (Testcontainers pg)', () => {
     times.sort((a, b) => a - b);
     console.info(`[NFR-1 indicative] GET /pulls/#482/brief p95 = ${times[18]!.toFixed(1)} ms (n=20)`);
     expect(times[18]!).toBeLessThan(1000);
+    await app.close();
+  });
+
+  it('GET of a stored brief of ~64 KB responds within the NFR-1 budget: p95 <= 200 ms (n=20)', async () => {
+    // NFR-1 (SPEC-03): GET /pulls/:id/brief p95 <= 200 ms for a stored brief of up to 64 KB of JSON.
+    // Would fail if the read path became O(size) in a costly way (re-validation, N+1, per-item queries).
+    const MAX_BYTES = 65_536;
+    const filler = (i: number) => ({
+      file: `src/module-${i}/some/deeply/nested/path/file-${i}.ts`,
+      line: (i % 500) + 1,
+      reason: `Reason ${i}: ` + 'x'.repeat(200),
+    });
+    const base = { ...PR_482_BRIEF, review_focus: [] as PrBrief['review_focus'] };
+    const bytes = (b: PrBrief) => Buffer.byteLength(JSON.stringify(b), 'utf8');
+    const review_focus: PrBrief['review_focus'] = [];
+    let brief: PrBrief = base;
+    // Grow until the next item would cross 64 KB, leaving < ~1 item of headroom.
+    for (let i = 0; ; i++) {
+      const next = { ...base, review_focus: [...review_focus, filler(i)] };
+      if (bytes(next) > MAX_BYTES - 500) break;
+      review_focus.push(filler(i));
+      brief = next;
+    }
+    const size = bytes(brief);
+    expect(PrBriefContract.safeParse(brief).success).toBe(true);
+    expect(size).toBeGreaterThanOrEqual(60_000);
+    expect(size).toBeLessThanOrEqual(MAX_BYTES);
+
+    const { app } = await appWith();
+    const { pr } = await makePr();
+    await pg.handle.db.insert(t.prBrief).values({ prId: pr.id, json: brief });
+
+    const times: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      const t0 = performance.now();
+      const r = await app.inject({ method: 'GET', url: `/pulls/${pr.id}/brief` });
+      times.push(performance.now() - t0);
+      expect(r.statusCode).toBe(200);
+      // Guards against measuring a null/short response (corrupt-JSON path reads as null).
+      expect(Buffer.byteLength(r.body, 'utf8')).toBeGreaterThanOrEqual(60_000);
+      expect(r.json().review_focus).toHaveLength(review_focus.length);
+    }
+    times.sort((a, b) => a - b);
+    const p95 = times[18]!;
+    console.info(`[NFR-1 64KB] GET /pulls/:id/brief (${size} bytes) p95 = ${p95.toFixed(1)} ms (n=20)`);
+    expect(p95).toBeLessThanOrEqual(200);
     await app.close();
   });
 });

@@ -9,6 +9,7 @@
     "eval:skills": "vitest run skills",
     "eval:agents": "vitest run agents",
     "eval:workflow": "vitest run workflow",
+    "eval:rules": "vitest run rules/",
     "eval:quality": "tsx src/skill-quality.ts",
     "eval:compare": "tsx src/compare.ts",
     "eval:repeat": "tsx src/repeat.ts",

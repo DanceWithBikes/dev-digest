@@ -31,6 +31,12 @@ export interface RecordData {
   verdict?: Verdict;
   grounded?: number;
   threshold?: number;
+  /**
+   * The case's real verdict, when the caller knows it. Workflow cases pass it: their asserts are on
+   * the trace, so "did the run error" is the wrong proxy (an activated skill can still hit max-turns;
+   * a wrongly activated skill can finish cleanly).
+   */
+  outcome?: boolean;
   extra?: Record<string, unknown>;
 }
 
@@ -47,7 +53,9 @@ export function record(label: string, data: RecordData): void {
   // outcome: grounding gate failure short-circuits to false; else the judge threshold; else
   // "did the run itself succeed" (workflow tests have neither grounding nor a judge verdict).
   const outcome =
-    grounded !== undefined && grounded < 1
+    data.outcome !== undefined
+      ? data.outcome
+      : grounded !== undefined && grounded < 1
       ? false
       : verdict && threshold !== undefined
         ? verdict.score >= threshold
@@ -78,6 +86,7 @@ export function record(label: string, data: RecordData): void {
       subagents: result.subagents,
       skills: result.skillsInvoked,
       reads: result.filesRead,
+      memory: result.memoryLoaded,
     },
     output_file: outputFile,
     ...extra,

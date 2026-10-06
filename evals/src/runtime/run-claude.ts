@@ -3,10 +3,12 @@
  * extracts what the session ACTUALLY did (tools, subagents, skills, reads) — not its prose.
  */
 
-import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
+import { query, type HookCallback, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { EVAL_MODEL, MAX_TURNS, SPAWN_TOOLS } from "../config.js";
 import { REPO_ROOT } from "../artifacts/paths.js";
+import { isAbsolute, resolve, sep } from "node:path";
 import { subscriptionEnv } from "./env.js";
+import { nestedMemoryLoaded } from "./transcript.js";
 
 export interface Metrics {
   durationMs: number;
@@ -23,6 +25,11 @@ export interface Result {
   /** Skills activated via the Skill tool (workflow mode); name may be "plugin:skill". */
   skillsInvoked: string[];
   filesRead: string[];
+  /**
+   * Nested CLAUDE.md files the harness attached (repo-relative, load order). Read from the on-disk
+   * transcript — the SDK stream never shows them. Always [] without settingSources:["project"].
+   */
+  memoryLoaded: string[];
   numTurns: number;
   isError: boolean;
   metrics: Metrics;
@@ -42,7 +49,41 @@ export interface RunOptions {
    * (e.g. the subagent was launched) instead of waiting for a heavy nested subagent to finish.
    * On an early stop the run is NOT an error and metrics reflect only what ran before the stop.
    */
-  stopWhen?: (partial: Pick<Result, "subagents" | "filesRead" | "skillsInvoked" | "toolsUsed">) => boolean;
+  stopWhen?: (
+    partial: Pick<Result, "subagents" | "filesRead" | "skillsInvoked" | "toolsUsed" | "memoryLoaded">,
+  ) => boolean;
+  /**
+   * Deny Read/Grep/Glob on an absolute path outside `cwd`. A control run in a stripped repo copy
+   * could otherwise read the real repo by absolute path and leak the very rules it lacks.
+   */
+  confineToCwd?: boolean;
+}
+
+/**
+ * PreToolUse backstop: deny any tool call outside the allow-list (MCP tools included). Hooks fire
+ * even under bypassPermissions, so this holds where `tools` / `strictMcpConfig` don't reach.
+ */
+function denyUnlisted(allowed: string[], confineTo?: string): HookCallback {
+  const ok = new Set(allowed);
+  const deny = (reason: string) => ({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse" as const,
+      permissionDecision: "deny" as const,
+      permissionDecisionReason: `eval sandbox: ${reason}`,
+    },
+  });
+  return async (input) => {
+    const { tool_name: name = "", tool_input: args = {} } = input as {
+      tool_name?: string;
+      tool_input?: { file_path?: string; path?: string };
+    };
+    if (!ok.has(name)) return deny(`tool ${name} is not in the allow-list`);
+    const target = args.file_path ?? args.path;
+    if (confineTo && target && isAbsolute(target) && !resolve(target).startsWith(confineTo + sep)) {
+      return deny(`${target} is outside the working directory`);
+    }
+    return {};
+  };
 }
 
 /** Run one headless Claude turn-loop and extract what it ACTUALLY did (not its prose). */
@@ -59,13 +100,23 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     systemPrompt = (systemPrompt ?? "") + directive;
   }
 
+  const cwd = opts.cwd ?? REPO_ROOT;
   const options: Options = {
     model: opts.model ?? EVAL_MODEL,
     maxTurns: opts.maxTurns ?? MAX_TURNS,
     permissionMode: "bypassPermissions", // safe: evals only read/plan and tools are allow-listed
     systemPrompt,
+    // `allowedTools` only AUTO-APPROVES; under bypassPermissions every other tool would still run.
+    // `tools` is what actually restricts the set ([] = no built-in tools at all).
+    tools: allowedTools,
     allowedTools,
-    cwd: opts.cwd ?? REPO_ROOT,
+    // `tools` only governs BUILT-IN tools — MCP servers (project .mcp.json, claude.ai connectors)
+    // stay callable. A workflow eval once tried mcp__claude_ai_Claude_Docs__batch (create a doc in
+    // the user's account). Load no MCP server at all; the hook below is the backstop.
+    mcpServers: {},
+    strictMcpConfig: true,
+    hooks: { PreToolUse: [{ hooks: [denyUnlisted(allowedTools, opts.confineToCwd ? cwd : undefined)] }] },
+    cwd,
     // Default: do NOT load on-disk config — isolates the injected artifact. workflowTask overrides.
     settingSources: opts.settingSources ?? [],
     env: subscriptionEnv(),
@@ -87,6 +138,15 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
   let inputTokens = 0;
   let outputTokens = 0;
   let stoppedEarly = false;
+  let sessionId: string | undefined;
+  let memory: string[] = [];
+  const partial = () => ({
+    subagents: [...new Set(subagents)],
+    filesRead: reads,
+    skillsInvoked: [...new Set(skills)],
+    toolsUsed: [...new Set(tools)],
+    memoryLoaded: memory,
+  });
   // Wall-clock fallback: on an early stop we break before the result message that carries
   // duration_ms/usage, so those stay 0. Stamp duration ourselves, and accumulate output tokens
   // off each assistant message, so an early-stopped case still reports meaningful metrics.
@@ -96,7 +156,16 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
   // and the tool/subagent trace we collected, so catch and fall through with isError=true.
   try {
     loop: for await (const msg of query({ prompt, options })) {
-      if (msg.type === "assistant") {
+      sessionId ??= (msg as any).session_id;
+      if (msg.type === "user") {
+        // A tool result just landed — the harness has written its nested_memory attachments by now
+        // (or will by the next message), so re-check the transcript and give stopWhen a chance.
+        memory = nestedMemoryLoaded(sessionId, cwd);
+        if (opts.stopWhen?.(partial())) {
+          stoppedEarly = true;
+          break loop;
+        }
+      } else if (msg.type === "assistant") {
         numTurns++;
         outputTokens += (msg.message as any).usage?.output_tokens ?? 0;
         for (const block of msg.message.content as any[]) {
@@ -119,14 +188,7 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
             }
             // Evidence is in — break the loop before a heavy nested subagent runs to completion.
             // Breaking the async iterator triggers its return()/abort, tearing down the subprocess.
-            if (
-              opts.stopWhen?.({
-                subagents: [...new Set(subagents)],
-                filesRead: reads,
-                skillsInvoked: [...new Set(skills)],
-                toolsUsed: [...new Set(tools)],
-              })
-            ) {
+            if (opts.stopWhen?.(partial())) {
               stoppedEarly = true;
               break loop;
             }
@@ -158,6 +220,7 @@ export async function runClaude(prompt: string, opts: RunOptions = {}): Promise<
     subagents: [...new Set(subagents)],
     skillsInvoked: [...new Set(skills)],
     filesRead: reads,
+    memoryLoaded: nestedMemoryLoaded(sessionId, cwd),
     numTurns,
     isError,
     metrics: { durationMs, inputTokens, outputTokens, toolCallCount },

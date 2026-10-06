@@ -51,7 +51,7 @@ export interface EvalRecord {
   grounded?: number;
   num_turns: number;
   metrics: { durationMs: number; inputTokens: number; outputTokens: number; toolCallCount: number };
-  trace: { tools: string[]; subagents: string[]; skills: string[]; reads: string[] };
+  trace: { tools: string[]; subagents: string[]; skills: string[]; reads: string[]; memory?: string[] };
   output_file: string;
 }
 

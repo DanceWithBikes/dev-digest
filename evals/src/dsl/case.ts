@@ -12,6 +12,8 @@ import { test, expect } from "vitest";
 import { DEFAULT_THRESHOLD } from "../config.js";
 import { skillTask, agentTask, workflowTask } from "../tasks.js";
 import { runClaude, type Result, type RunOptions } from "../runtime/run-claude.js";
+import { strippedRepo } from "../runtime/stripped-repo.js";
+import { REPO_ROOT } from "../artifacts/paths.js";
 import { patternMatch } from "../scoring/pattern-match.js";
 import { llmJudge, type Verdict } from "../scoring/llm-judge.js";
 import { logTrace, logVerdict } from "../logging/log.js";
@@ -65,6 +67,38 @@ export type WorkflowCase =
       expectSubagents?: string[];
       expectSkills?: string[];
       expectFilesRead?: string[];
+      /**
+       * Nested CLAUDE.md files the harness must have attached (repo-relative, e.g.
+       * "server/src/modules/CLAUDE.md"). Proves the right local rules reached the context — NOT that
+       * the model applied them. Read from the session transcript (see runtime/transcript.ts).
+       */
+      expectMemoryLoaded?: string[];
+      maxTurns?: number;
+    }
+  | {
+      // Did the delivered rule change WHAT THE AGENT SAYS? Trace cases prove delivery; this one
+      // checks the final answer. Read-only tools (Read/Grep/Glob), no skills or subagents, so the
+      // answer reflects CLAUDE.md + code only. Checks run cheap-first: substrings, then the judge.
+      kind: "answer";
+      name: string;
+      prompt: string;
+      /** Nested CLAUDE.md files that must be attached in the treatment run. */
+      expectMemoryLoaded?: string[];
+      /** Substrings that must ALL appear in the answer (case-insensitive). */
+      expectText?: string[];
+      /** Substrings that must NOT appear. Keep them recommendation-shaped — a model warning
+       *  "don't run X" quotes X; use `practices` for prohibitions instead. */
+      forbidText?: string[];
+      /** Judge practices; every one must PASS (binary, verbatim evidence). */
+      practices?: string[];
+      /**
+       * Also run the prompt in a repo copy WITHOUT nested CLAUDE.md (src/runtime/stripped-repo.ts)
+       * and require it to FAIL the content checks — proof the nested rule is what changed the answer.
+       * Leave off when the rule is also stated in the root CLAUDE.md (the copy keeps the root).
+       */
+      control?: boolean;
+      /** Model under test for this case (default EVAL_MODEL). The judge keeps EVAL_JUDGE_MODEL. */
+      model?: string;
       maxTurns?: number;
     };
 
@@ -115,6 +149,25 @@ function runQualityCases(artifact: string, cases: QualityCase[], task: Task): vo
 export const runSkillCases = (skill: string, cases: SkillCase[]) => runQualityCases(skill, cases, skillTask);
 export const runAgentCases = (agent: string, cases: AgentCase[]) => runQualityCases(agent, cases, agentTask);
 
+/**
+ * Content checks for an `answer` case, cheap tier first: the judge runs only when the substring
+ * checks pass. Returns the list of failed checks (empty = the answer follows the rule).
+ */
+async function checkAnswer(
+  text: string,
+  c: { expectText?: string[]; forbidText?: string[]; practices?: string[] },
+): Promise<{ problems: string[]; verdict?: Verdict }> {
+  const low = text.toLowerCase();
+  const problems = [
+    ...(c.expectText ?? []).filter((e) => !low.includes(e.toLowerCase())).map((e) => `missing "${e}"`),
+    ...(c.forbidText ?? []).filter((f) => low.includes(f.toLowerCase())).map((f) => `contains forbidden "${f}"`),
+  ];
+  if (problems.length || !c.practices?.length) return { problems };
+  const verdict = await llmJudge(text, c.practices);
+  for (const r of verdict.results) if (!r.passed) problems.push(`judge FAIL: ${r.practice}`);
+  return { problems, verdict };
+}
+
 export function runWorkflowCases(cases: WorkflowCase[]): void {
   for (const c of cases) {
     test(c.name, async () => {
@@ -126,21 +179,35 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
           stopWhen: (p) => p.subagents.includes(expect1),
         });
         logTrace(c.name, result);
+        let ok = false;
         try {
           expect(result.subagents, `subagents: ${result.subagents.join(", ")}`).toContain(c.expectSubagent);
+          ok = true;
         } finally {
-          record(c.name, { result });
+          record(c.name, { result, outcome: ok });
         }
       } else if (c.kind === "activation") {
-        const result = await workflowTask(c.prompt, { maxTurns: c.maxTurns });
+        // A positive case stops the moment the skill engages — otherwise the model goes on to DO the
+        // skill's work and burns the turn budget. A negative case must run to the end to prove absence.
+        const skill = c.skill;
+        const result = await workflowTask(c.prompt, {
+          maxTurns: c.maxTurns,
+          stopWhen: c.shouldActivate
+            ? (p) =>
+                p.skillsInvoked.some((s) => s === skill || s.endsWith(`:${skill}`)) ||
+                p.filesRead.some((f) => f.includes(`skills/${skill}/SKILL.md`))
+            : undefined,
+        });
         logTrace(c.name, result);
+        let ok = false;
         try {
           expect(
             activated(result, c.skill),
             `skills: ${result.skillsInvoked.join(", ")} | reads: ${result.filesRead.join(", ")}`,
           ).toBe(c.shouldActivate);
+          ok = true;
         } finally {
-          record(c.name, { result });
+          record(c.name, { result, outcome: ok });
         }
       } else if (c.kind === "trace") {
         // One session, many asserts — every provided expectation is checked against the same trace.
@@ -149,6 +216,7 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         const subs = c.expectSubagents ?? [];
         const skls = c.expectSkills ?? [];
         const files = c.expectFilesRead ?? [];
+        const mems = c.expectMemoryLoaded ?? [];
         const skillEngaged = (p: { skillsInvoked: string[]; filesRead: string[] }, skill: string) =>
           p.skillsInvoked.some((s) => s === skill || s.endsWith(`:${skill}`)) ||
           p.filesRead.some((f) => f.includes(`skills/${skill}/SKILL.md`));
@@ -157,9 +225,11 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
           stopWhen: (p) =>
             subs.every((s) => p.subagents.includes(s)) &&
             skls.every((s) => skillEngaged(p, s)) &&
-            files.every((f) => p.filesRead.some((r) => r.includes(f))),
+            files.every((f) => p.filesRead.some((r) => r.includes(f))) &&
+            mems.every((m) => p.memoryLoaded.includes(m)),
         });
         logTrace(c.name, result);
+        let ok = false;
         try {
           for (const sub of c.expectSubagents ?? []) {
             expect(result.subagents, `subagents: ${result.subagents.join(", ")}`).toContain(sub);
@@ -176,9 +246,61 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
               `${file} not read | reads: ${result.filesRead.join(", ")}`,
             ).toBe(true);
           }
+          for (const mem of mems) {
+            expect(
+              result.memoryLoaded,
+              `${mem} not attached | memory: ${result.memoryLoaded.join(", ") || "(none)"}`,
+            ).toContain(mem);
+          }
           expect(result.isError).toBe(false);
+          ok = true;
         } finally {
-          record(c.name, { result });
+          record(c.name, { result, outcome: ok });
+        }
+      } else if (c.kind === "answer") {
+        const tools = ["Read", "Grep", "Glob"];
+        const run = (cwd: string) =>
+          runClaude(c.prompt, {
+            allowedTools: tools,
+            maxTurns: c.maxTurns,
+            settingSources: ["project"],
+            cwd,
+            confineToCwd: true,
+            model: c.model,
+          });
+        const [treatment, control] = await Promise.all([
+          run(REPO_ROOT),
+          c.control ? run(strippedRepo()) : Promise.resolve(undefined),
+        ]);
+        logTrace(c.name, treatment);
+        if (control) logTrace(`${c.name} [control]`, control);
+
+        const [t, k] = await Promise.all([
+          checkAnswer(treatment.text, c),
+          control ? checkAnswer(control.text, c) : Promise.resolve(undefined),
+        ]);
+        if (t.verdict) logVerdict(c.name, t.verdict);
+        if (k?.verdict) logVerdict(`${c.name} [control]`, k.verdict);
+
+        let ok = false;
+        try {
+          for (const mem of c.expectMemoryLoaded ?? []) {
+            expect(
+              treatment.memoryLoaded,
+              `${mem} not attached | memory: ${treatment.memoryLoaded.join(", ") || "(none)"}`,
+            ).toContain(mem);
+          }
+          expect(t.problems, `answer broke the rule:\n${treatment.text}`).toEqual([]);
+          if (k) {
+            expect(
+              k.problems.length,
+              `rule adds nothing — the control (no nested CLAUDE.md) answered correctly too:\n${control!.text}`,
+            ).toBeGreaterThan(0);
+          }
+          ok = true;
+        } finally {
+          record(c.name, { result: treatment, verdict: t.verdict, outcome: ok });
+          if (control) record(`${c.name} [control]`, { result: control, verdict: k?.verdict, outcome: ok });
         }
       } else {
         // contrast: treatment (real harness) vs control (empty tmpdir, no on-disk config).
@@ -193,14 +315,16 @@ export function runWorkflowCases(cases: WorkflowCase[]): void {
         });
         logTrace(`${c.name} [treatment]`, treatment);
         logTrace(`${c.name} [control]`, control);
+        let ok = false;
         try {
           const treatmentRead = treatment.filesRead.some((f) => f.includes(c.expectFileRead));
           const controlRead = control.filesRead.some((f) => f.includes(c.expectFileRead));
           expect(treatmentRead, `treatment reads: ${treatment.filesRead.join(", ")}`).toBe(true);
           expect(controlRead, `control reads: ${control.filesRead.join(", ")}`).toBe(false);
+          ok = true;
         } finally {
-          record(`${c.name} [treatment]`, { result: treatment });
-          record(`${c.name} [control]`, { result: control });
+          record(`${c.name} [treatment]`, { result: treatment, outcome: ok });
+          record(`${c.name} [control]`, { result: control, outcome: ok });
         }
       }
     });

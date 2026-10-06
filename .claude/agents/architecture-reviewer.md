@@ -92,3 +92,4 @@ Emit these sections, in this order, with these literal headings.
 - Severity grades the boundary, not the diff size.
 - `- No findings.` is a legitimate result, but only when `## Checked and clean` shows what you actually looked at.
 - If you hit something non-obvious a future agent could not learn from the code (a dead end, a quirk, an implicit convention), say so in one line at the end so the caller can record it via the `engineering-insights` skill — you do not write files yourself.
+

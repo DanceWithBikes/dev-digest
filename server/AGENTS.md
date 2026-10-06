@@ -36,3 +36,4 @@ pnpm arch:check                                       # import-boundary gate (On
 
 ## Docs
 README.md (API map, env vars, DI flow) · ../TESTING.md · docs/specs/ · docs/insights.md
+

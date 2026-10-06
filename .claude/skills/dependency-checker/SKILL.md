@@ -62,3 +62,4 @@ Always these seven sections, in this order, with these headings. If a section ha
 - **Check `docs/insights.md`** (root and the package's own) for recorded dead ends before recommending a removal or an upgrade, and cite the entry if it applies.
 - **Non-obvious finding?** Record it with the `engineering-insights` skill (for example a package that looks unused but is loaded dynamically).
 - **No security verdicts.** If the user asks about vulnerabilities, suggest `pnpm audit` / `npm audit` per package and stop there.
+

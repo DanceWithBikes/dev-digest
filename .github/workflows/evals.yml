@@ -38,11 +38,9 @@ concurrency:
   group: evals-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # inputs.* is empty on pull_request events, so the hybrid defaults apply there.
-  SKILL_MODEL: ${{ inputs.skill_model || 'deepseek/deepseek-chat' }}
-  AGENT_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
-  JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+# NOTE: the `env` and `runner` contexts are NOT available in job-level `env` blocks (only in
+# steps), so each job inlines `${{ inputs.x || '<default>' }}` directly. inputs.* is empty on
+# pull_request events, so the hybrid defaults apply there.
 
 jobs:
   detect:
@@ -112,8 +110,8 @@ jobs:
     env:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      EVAL_MODEL: ${{ env.SKILL_MODEL }}
-      EVAL_JUDGE_MODEL: ${{ env.JUDGE_MODEL }}
+      EVAL_MODEL: ${{ inputs.skill_model || 'deepseek/deepseek-chat' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -154,9 +152,9 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ env.AGENT_MODEL }}
-      EVAL_JUDGE_MODEL: ${{ env.JUDGE_MODEL }}
-      CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude # trace JSONL in a known dir
+      EVAL_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config # trace JSONL in a known dir (runner ctx not allowed here)
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -195,9 +193,9 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ env.AGENT_MODEL }}
-      EVAL_JUDGE_MODEL: ${{ env.JUDGE_MODEL }}
-      CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude
+      EVAL_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -236,9 +234,9 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ env.AGENT_MODEL }}
-      EVAL_JUDGE_MODEL: ${{ env.JUDGE_MODEL }}
-      CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude
+      EVAL_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

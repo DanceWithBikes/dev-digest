@@ -186,62 +186,38 @@ workflow cases:
 > checkout is disposable); locally, prefer the Anthropic path or a throwaway clone for the workflow
 > tier.
 
-### Wiring it into GitHub Actions (per-PR)
+### GitHub Actions (per-PR): `.github/workflows/evals.yml`
 
-The engine is CI-ready: bring the proxy up as a step, wait for it, run the tier, tear it down. Put
-the OpenRouter key in the repo's **Actions secrets** as `OPENROUTER_API_KEY` (Settings → Secrets and
-variables → Actions). Create `.github/workflows/<name>.yml` in your repo:
+The repo ships a real workflow — `.github/workflows/evals.yml` — wired to this package. How it
+works:
 
-```yaml
-name: evals
-on:
-  pull_request:
-    paths: ['evals/**', '.claude/**', 'CLAUDE.md']   # only when the harness/artifacts change
+- **Change detection** (`scripts/ci-detect.mjs`): a `detect` job diffs the PR against its base
+  (`git diff --name-only origin/$BASE...HEAD`) and decides what to run — a changed skill runs its
+  `evals/skills/<name>/` suite (if one exists; otherwise a visible `SKIP <name> (no evals)`), a
+  changed agent runs its `evals/agents/<name>/` suite plus the workflow tier, any changed memory
+  file (`AGENTS.md`/`CLAUDE.md`, nested included, except `.claude/skills/**` and `server/clones/**`)
+  runs the workflow + rules tiers. `workflow_dispatch` sets `FORCE_ALL=true` and runs everything.
+- **Hybrid models**: the content tier runs on `deepseek/deepseek-chat` straight against OpenRouter
+  (no proxy — `skillTask` and the judge go through `run-openrouter.ts`); the tool tiers
+  (agents/workflow/rules) run on `google/gemini-2.5-flash` through the LiteLLM proxy, because
+  DeepSeek does the work inline instead of dispatching subagents (measured above). All three models
+  (`skill_model`, `agent_model`, `judge_model`) are `workflow_dispatch` inputs.
+- **Non-blocking by design**: every job has `continue-on-error: true` — LLM evals are
+  probabilistic and never block a merge. A final `summary` job writes the per-job outcomes and the
+  SKIP lists to the run summary. Note: with job-level `continue-on-error`, `needs.<job>.result` can
+  read `success` even for a failed job; the job's own red ✗ in the run view is the honest signal.
+- **One secret**: `OPENROUTER_API_KEY` in the repo's Actions secrets (Settings → Secrets and
+  variables → Actions). It doubles as the proxy's `LITELLM_MASTER_KEY` (see
+  `proxy/docker-compose.yml`), so no second secret is needed.
+- **Fork PRs** get `detect` + `static` only (secrets are unavailable there).
+- **No `push` trigger**: every run costs real tokens; PR feedback is the point. The deterministic
+  `static` job (`eval:quality` + `typecheck`) always runs; the `rules` cases drop their pinned
+  Anthropic model under `EVAL_BACKEND=openrouter` and fall back to `EVAL_MODEL`.
 
-permissions:
-  contents: read
-
-jobs:
-  workflow-evals:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: evals
-    env:
-      EVAL_BACKEND: openrouter
-      OPENROUTER_BASE_URL: http://localhost:4000
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}   # repo Actions secret
-      EVAL_MODEL: google/gemini-2.5-flash
-      EVAL_JUDGE_MODEL: google/gemini-2.5-flash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: 10 }
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: evals/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-
-      # --- the engine ---
-      - run: docker compose -f proxy/docker-compose.yml up -d   # OPENROUTER_API_KEY from job env
-      - run: pnpm proxy:wait                                     # block until the proxy answers
-      - run: pnpm eval:workflow                                  # or eval:agents / eval:skills / eval
-      - if: failure()
-        run: docker compose -f proxy/docker-compose.yml logs --tail 100
-      - if: always()
-        run: docker compose -f proxy/docker-compose.yml down
-```
-
-Notes:
-- ubuntu runners ship Docker + `docker compose`, so no extra setup is needed.
-- The proxy container reads `OPENROUTER_API_KEY` straight from the job `env` (which is fed by the
-  secret) — you don't pass it to `docker compose` explicitly.
-- Because tool tiers cost real tokens, gate on `paths:` (only when the harness/artifacts change) and
-  keep the case count small. For a stricter gate, split into a required `eval:agents`/`eval:skills`
-  job and a non-blocking `eval:workflow` job (activation flakiness, above).
+Measured on `google/gemini-2.5-flash` via the proxy (2026-10-07): workflow tier 14 tests in ~90 s,
+rules 5 in ~66 s, agents (architecture-reviewer) 4 in ~150 s; content tier on
+`deepseek/deepseek-chat` 3 in ~124 s. Expect a few quality failures on these models — that is the
+signal the run summary reports, not CI noise to fix.
 
 ## Module layout — `src/` (the engine)
 
@@ -288,9 +264,10 @@ src/
 
 ## Case layout — where your tests, prompts, and fixtures live
 
-> The package ships with **no example cases** — `skills/`, `agents/`, and `workflow/` are yours to
-> fill. The names below (`onion-architecture`, `architecture-reviewer`, …) are **illustrations of
-> the format only**, not files in the repo. Create your own with `pnpm eval:scaffold`.
+> Live suites in the repo: `skills/{dependency-checker,react-best-practices}`,
+> `agents/{architecture-reviewer,architecture-reviewer-lite}`, `workflow/{review-workflow,
+> nested-memory}`, `rules/rules`. The names below are **illustrations of the format only**; create
+> new suites with `pnpm eval:scaffold`.
 
 You bring your own skills/agents, so **you scaffold cases, not hand-copy files**:
 
@@ -413,7 +390,8 @@ pnpm eval:quality        # fast static gate (no model)
 pnpm eval                # all quality + workflow evals, once
 pnpm eval:skills         # just skills/
 pnpm eval:agents         # just agents/
-pnpm eval:workflow       # just workflow/
+pnpm eval:workflow       # just workflow/ — trace asserts only, deterministic, haiku
+pnpm eval:rules          # just rules/ — `answer` cases: do nested CLAUDE.md rules change the answer? (sonnet + judge, slower)
 pnpm vitest run skills/onion-architecture       # one artifact
 pnpm vitest run src/records/stats.test.ts       # the only non-model unit test (stats math)
 ```
@@ -562,6 +540,7 @@ tokens > 125% of baseline), `missing_data` (a config has zero records for a test
 | A skill's `SKILL.md` (quick check) | `pnpm vitest run skills/<skill>` |
 | A subagent file (quick check) | `pnpm vitest run agents/<agent>` |
 | `CLAUDE.md` / activation / dispatch | `pnpm eval:workflow` |
+| A rule in a nested `AGENTS.md` (is it followed?) | `pnpm eval:rules` |
 | Any artifact's structure | `pnpm eval:quality` |
 | A `SKILL.md` edit you want to **measure** | repeat/delta loop: `--label baseline` before, `--label candidate` after, then `eval:delta` |
 | New skill/agent — is it **worth its tokens**? | `pnpm eval:benchmark skills/<skill> -n 5` |
@@ -574,6 +553,12 @@ tokens > 125% of baseline), `missing_data` (a config has zero records for a test
 Sessions run with `permissionMode: "bypassPermissions"`, so `workflowTask` keeps a **read-only
 allow-list** (`Read, Grep, Glob, Task, Agent, Skill` — no `Bash`/`Write`/`Edit`). Don't copy the
 bypass pattern into a context that grants write tools.
+
+`allowedTools` alone does NOT enforce that list — in the Agent SDK it only auto-approves. `runClaude`
+therefore also passes `tools` (the real built-in restriction), `mcpServers: {}` + `strictMcpConfig`
+(no `.mcp.json` server, no claude.ai connector — one eval once tried to create a Claude Docs doc),
+and a `PreToolUse` hook that denies anything off the list. `answer` cases add `confineToCwd`, so a
+control run in the stripped repo copy can't read the real repo by absolute path.
 
 ## Deferred (recorded so it isn't rediscovered)
 

@@ -17,6 +17,11 @@ services:
       - "4000:4000"
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in the environment}
+      # Newer litellm builds refuse to boot with no master key. Reuse the OpenRouter key: it is
+      # exactly the bearer token the SDK forwards (ANTHROPIC_AUTH_TOKEN=OPENROUTER_API_KEY) and the
+      # judge's OpenAI client sends, so both tiers authenticate with no harness changes and CI
+      # needs no second secret. See litellm.config.yaml.
+      LITELLM_MASTER_KEY: ${OPENROUTER_API_KEY}
     volumes:
       - ./litellm.config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]

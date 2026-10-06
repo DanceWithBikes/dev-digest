@@ -96,7 +96,7 @@ jobs:
     # Content tier: skillTask and the judge both go through run-openrouter.ts (plain
     # chat.completions, straight to OpenRouter) — no Agent SDK, no proxy.
     needs: detect
-    if: needs.detect.outputs.skills != '[]' && github.event.pull_request.head.repo.fork != true
+    if: needs.detect.outputs.skills != '[]' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -137,7 +137,7 @@ jobs:
     # Tool tier: Agent SDK speaks the Anthropic wire format, so it reaches OpenRouter through the
     # LiteLLM proxy. The judge routes through the same proxy (it serves both API formats).
     needs: detect
-    if: needs.detect.outputs.agents != '[]' && github.event.pull_request.head.repo.fork != true
+    if: needs.detect.outputs.agents != '[]' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
@@ -182,7 +182,7 @@ jobs:
 
   workflow:
     needs: detect
-    if: needs.detect.outputs.run_workflow == 'true' && github.event.pull_request.head.repo.fork != true
+    if: needs.detect.outputs.run_workflow == 'true' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
@@ -223,7 +223,7 @@ jobs:
 
   rules:
     needs: detect
-    if: needs.detect.outputs.run_rules == 'true' && github.event.pull_request.head.repo.fork != true
+    if: needs.detect.outputs.run_rules == 'true' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 35
     continue-on-error: true

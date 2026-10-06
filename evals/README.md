@@ -204,8 +204,10 @@ works:
   (`skill_model`, `agent_model`, `judge_model`) are `workflow_dispatch` inputs.
 - **Non-blocking by design**: every job has `continue-on-error: true` — LLM evals are
   probabilistic and never block a merge. A final `summary` job writes the per-job outcomes and the
-  SKIP lists to the run summary. Note: with job-level `continue-on-error`, `needs.<job>.result` can
-  read `success` even for a failed job; the job's own red ✗ in the run view is the honest signal.
+  SKIP lists to the run summary. Confirmed on the smoke PR: `needs.<job>.result` reads `success`
+  even for a failed job under job-level `continue-on-error`, so the summary pulls the real
+  per-job conclusions from the jobs API (`gh run view --json jobs`, `permissions: actions: read`);
+  the job's own red ✗ in the run view is honest too.
 - **One secret**: `OPENROUTER_API_KEY` in the repo's Actions secrets (Settings → Secrets and
   variables → Actions). It doubles as the proxy's `LITELLM_MASTER_KEY` (see
   `proxy/docker-compose.yml`), so no second secret is needed.

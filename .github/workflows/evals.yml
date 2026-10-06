@@ -33,6 +33,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # summary job reads real per-job conclusions via the API
 
 concurrency:
   group: evals-${{ github.ref }}
@@ -264,10 +265,14 @@ jobs:
 
   summary:
     # Non-blocking failures don't fail the run, so surface the real per-job outcomes here.
+    # Verified on the smoke PR: needs.<job>.result reports "success" for a job that failed under
+    # job-level continue-on-error, so the honest source is the jobs API (hence actions: read).
     needs: [detect, static, skills, agents, workflow, rules]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - run: |
           {
@@ -275,11 +280,8 @@ jobs:
             echo ""
             echo "| job | result |"
             echo "|---|---|"
-            echo "| static (quality + typecheck) | ${{ needs.static.result }} |"
-            echo "| skills ${{ needs.detect.outputs.skills }} | ${{ needs.skills.result }} |"
-            echo "| agents ${{ needs.detect.outputs.agents }} | ${{ needs.agents.result }} |"
-            echo "| workflow | ${{ needs.workflow.result }} |"
-            echo "| rules | ${{ needs.rules.result }} |"
+            gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs \
+              --jq '.jobs[] | select(.name != "summary") | "| \(.name) | \(.conclusion // .status) |"'
             echo ""
             [ -n "${{ needs.detect.outputs.skipped_skills }}" ] && echo "SKIP skills (no evals): ${{ needs.detect.outputs.skipped_skills }}"
             [ -n "${{ needs.detect.outputs.skipped_agents }}" ] && echo "SKIP agents (no evals): ${{ needs.detect.outputs.skipped_agents }}"

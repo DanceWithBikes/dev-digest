@@ -199,7 +199,7 @@ works:
   runs the workflow + rules tiers. `workflow_dispatch` sets `FORCE_ALL=true` and runs everything.
 - **Hybrid models**: the content tier runs on `deepseek/deepseek-chat` straight against OpenRouter
   (no proxy — `skillTask` and the judge go through `run-openrouter.ts`); the tool tiers
-  (agents/workflow/rules) run on `google/gemini-2.5-flash` through the LiteLLM proxy, because
+  (agents/workflow/rules) run on `anthropic/claude-haiku-4.5` through the LiteLLM proxy, because
   DeepSeek does the work inline instead of dispatching subagents (measured above). All three models
   (`skill_model`, `agent_model`, `judge_model`) are `workflow_dispatch` inputs.
 - **Non-blocking by design**: every job has `continue-on-error: true` — LLM evals are
@@ -216,10 +216,20 @@ works:
   `static` job (`eval:quality` + `typecheck`) always runs; the `rules` cases drop their pinned
   Anthropic model under `EVAL_BACKEND=openrouter` and fall back to `EVAL_MODEL`.
 
-Measured on `google/gemini-2.5-flash` via the proxy (2026-10-07): workflow tier 14 tests in ~90 s,
-rules 5 in ~66 s, agents (architecture-reviewer) 4 in ~150 s; content tier on
-`deepseek/deepseek-chat` 3 in ~124 s. Expect a few quality failures on these models — that is the
-signal the run summary reports, not CI noise to fix.
+Model shoot-out (2026-10-07, same cases, judge `google/gemini-2.5-flash`):
+
+| tier (cases)                      | deepseek-chat | gemini-2.5-flash  | claude-haiku-4.5 |
+| --------------------------------- | ------------- | ----------------- | ---------------- |
+| skills: dependency-checker (3)    | **2/3**       | 0/3 (240s timeouts) | —              |
+| skills: react-best-practices (5)  | **4/5**       | 2/5               | —                |
+| agents: architecture-reviewer (4) | —             | 0/4 (thr 1.0)     | **2/4** (thr 0.8) |
+| workflow (14)                     | —             | 11–14/14          | 13/14            |
+| rules (5)                         | —             | 3/5               | **5/5**          |
+
+Hence the defaults: DeepSeek for content, Haiku 4.5 for tool tiers. Runtimes are a few minutes per
+tier. Remaining red on the agents tier is case-strictness (rule-identifier citations; a benign-diff
+fixture that references a path the repo no longer has), not infrastructure. Expect some quality
+failures on cheap models — that is the signal the run summary reports, not CI noise to fix.
 
 ## Module layout — `src/` (the engine)
 

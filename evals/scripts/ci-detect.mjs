@@ -53,6 +53,11 @@ function allWithEvals(tier) {
     .sort();
 }
 
+// An agent suite is runnable only if the agent definition itself exists — runAgentCases loads
+// .claude/agents/<name>.md and fails instantly otherwise (seen with architecture-reviewer-lite,
+// whose eval suite is committed but whose agent file is not).
+const hasAgentFile = (name) => existsSync(join(REPO_ROOT, ".claude", "agents", `${name}.md`));
+
 // Mirrors isNestedMemory (src/runtime/stripped-repo.ts), plus the root files: any AGENTS.md or
 // CLAUDE.md counts, except skill content and the imported repo copy.
 const isMemoryFile = (f) =>
@@ -81,8 +86,9 @@ const agentNames = touched(
 
 const skills = forceAll ? allWithEvals("skills") : skillNames.filter((n) => hasEvals("skills", n));
 const skippedSkills = forceAll ? [] : skillNames.filter((n) => !hasEvals("skills", n));
-const agents = forceAll ? allWithEvals("agents") : agentNames.filter((n) => hasEvals("agents", n));
-const skippedAgents = forceAll ? [] : agentNames.filter((n) => !hasEvals("agents", n));
+const agentPool = forceAll ? allWithEvals("agents") : agentNames;
+const agents = agentPool.filter((n) => hasEvals("agents", n) && hasAgentFile(n));
+const skippedAgents = agentPool.filter((n) => !hasEvals("agents", n) || !hasAgentFile(n));
 
 // The workflow tier measures the LIVE harness, so anything that changes it re-triggers it:
 // any memory file (root or nested), any agent definition, the workflow cases, or the engine itself.
@@ -121,4 +127,5 @@ console.error(`agents → run  : ${agents.join(", ") || "(none)"}`);
 console.error(`workflow tier : ${runWorkflow ? "run" : "skip"}`);
 console.error(`rules tier    : ${runRules ? "run" : "skip"}`);
 if (skippedSkills.length) console.error(`SKIP skills (no evals): ${skippedSkills.join(", ")}`);
-if (skippedAgents.length) console.error(`SKIP agents (no evals): ${skippedAgents.join(", ")}`);
+if (skippedAgents.length)
+  console.error(`SKIP agents (no evals or no .claude/agents/<name>.md): ${skippedAgents.join(", ")}`);

@@ -3,8 +3,9 @@
 # tier; any AGENTS.md/CLAUDE.md → the workflow + rules tiers. Runners have no Anthropic auth, so
 # everything runs on OpenRouter: the content tier calls it directly, the tool tiers (Agent SDK)
 # go through the LiteLLM proxy in evals/proxy/. Models are hybrid — DeepSeek can't drive the
-# subagent-dispatch cases (evals/README.md), so the tool tiers default to Gemini — and all three
-# are overridable via workflow_dispatch inputs.
+# subagent-dispatch cases (evals/README.md), so the tool tiers default to Claude Haiku 4.5
+# (measured 2026-10-07: rules 5/5 vs 3/5 on Gemini Flash) — all three models are overridable
+# via workflow_dispatch inputs.
 #
 # ALL jobs are informational (continue-on-error): LLM evals are probabilistic and must never block
 # a merge. The `summary` job writes the real outcomes to the run summary. No push trigger: every
@@ -26,7 +27,7 @@ on:
         default: 'deepseek/deepseek-chat'
       agent_model:
         description: 'OpenRouter model for agent/workflow/rules tiers (tool-calling, via LiteLLM)'
-        default: 'google/gemini-2.5-flash'
+        default: 'anthropic/claude-haiku-4.5'
       judge_model:
         description: 'OpenRouter model for the LLM judge'
         default: 'google/gemini-2.5-flash'
@@ -153,7 +154,7 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
+      EVAL_MODEL: ${{ inputs.agent_model || 'anthropic/claude-haiku-4.5' }}
       EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
       CLAUDE_CONFIG_DIR: /tmp/claude-config # trace JSONL in a known dir (runner ctx not allowed here)
     steps:
@@ -194,7 +195,7 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
+      EVAL_MODEL: ${{ inputs.agent_model || 'anthropic/claude-haiku-4.5' }}
       EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
       CLAUDE_CONFIG_DIR: /tmp/claude-config
     steps:
@@ -235,7 +236,7 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_BASE_URL: http://localhost:4000
-      EVAL_MODEL: ${{ inputs.agent_model || 'google/gemini-2.5-flash' }}
+      EVAL_MODEL: ${{ inputs.agent_model || 'anthropic/claude-haiku-4.5' }}
       EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
       CLAUDE_CONFIG_DIR: /tmp/claude-config
     steps:

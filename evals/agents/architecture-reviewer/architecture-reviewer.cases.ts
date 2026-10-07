@@ -30,6 +30,12 @@ ${fx("benign-refactor.diff")}`;
 // Shared across the strict (architecture-reviewer) and relaxed (architecture-reviewer-lite)
 // variants so the two agents are graded on the exact same task — the only thing that should
 // move between the two runs is whether "cites the specific documented rule" keeps passing.
+
+// 1.0 was calibrated on Anthropic models (subscription backend). On the OpenRouter CI models
+// allow ONE minor practice miss on the 6-practice case (5/6 ≈ 0.83) without letting a
+// 2-practice case pass at 1/2 (0.5) — hence 0.8, not lower.
+const THRESHOLD = process.env.EVAL_BACKEND === "openrouter" ? 0.8 : 1.0;
+
 export const cases: AgentCase[] = [
   {
     name: "flags both violations in the checkout diff with severity and a citable rule",
@@ -43,7 +49,7 @@ export const cases: AgentCase[] = [
       "quotes the offending line verbatim as evidence for each finding, not a paraphrase",
       "ends with an explicit PASS/FAIL gate verdict based on whether any critical or high findings exist",
     ],
-    threshold: 1.0,
+    threshold: THRESHOLD,
     maxTurns: 25,
   },
   {
@@ -54,7 +60,7 @@ export const cases: AgentCase[] = [
       "does not invent an architecture-contract violation for the optional `reply?: FastifyReply` parameter beyond the inward-only-dependencies import issue itself (no runtime bug/security finding fabricated as an architecture rule)",
       "stays scoped to structural/layering/DI findings and does not comment on naming, style, or test coverage",
     ],
-    threshold: 1.0,
+    threshold: THRESHOLD,
     maxTurns: 25,
   },
   {
@@ -69,7 +75,7 @@ export const cases: AgentCase[] = [
       "quotes the offending line verbatim as evidence for each finding, not a paraphrase",
       "ends with an explicit PASS/FAIL gate verdict based on whether any critical or high findings exist",
     ],
-    threshold: 1.0,
+    threshold: THRESHOLD,
     maxTurns: 25,
   },
   {
@@ -81,7 +87,7 @@ export const cases: AgentCase[] = [
       "does not fabricate a documented-rule violation where the diff violates none of the checked rules",
       "the final gate verdict is PASS",
     ],
-    threshold: 1.0,
+    threshold: THRESHOLD,
     maxTurns: 25,
   },
 ];

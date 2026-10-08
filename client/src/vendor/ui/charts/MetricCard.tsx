@@ -10,6 +10,7 @@ export function MetricCard({
   color,
   trend,
   suffix,
+  formatDelta,
 }: {
   label: string;
   value: React.ReactNode;
@@ -17,6 +18,8 @@ export function MetricCard({
   color?: string;
   trend?: number[];
   suffix?: string;
+  /** Formats the absolute delta; defaults to two decimals. */
+  formatDelta?: (abs: number) => string;
 }) {
   const up = (delta ?? 0) > 0;
   const flat = delta === 0;
@@ -62,7 +65,7 @@ export function MetricCard({
             }}
           >
             <DeltaIcon size={12} />
-            <span className="tnum">{Math.abs(delta).toFixed(2)}</span>
+            <span className="tnum">{formatDelta ? formatDelta(Math.abs(delta)) : Math.abs(delta).toFixed(2)}</span>
           </span>
         )}
       </div>

@@ -38,3 +38,9 @@ export const MAX_SKILL_ARCHIVE_ENTRY_BYTES = MAX_SKILL_BODY_CHARS * 4;
  * malformed header is cheap to reject, a 200 MB buffer is not.
  */
 export const MAX_SKILL_ARCHIVE_BYTES = 4 * 1024 * 1024;
+
+/** How many eval runs the Evals tab history returns. */
+export const EVAL_RUNS_LIMIT = 20;
+
+/** Rows per INSERT when importing eval records (keeps the parameter count well under the driver limit). */
+export const EVAL_UPSERT_CHUNK = 200;

@@ -1,0 +1,290 @@
+# Harness evals on PRs — which artifact changed decides which suites run (evals/scripts/ci-detect.mjs):
+# a skill → its evals/skills/<name> suite; an agent → its evals/agents/<name> suite + the workflow
+# tier; any AGENTS.md/CLAUDE.md → the workflow + rules tiers. Runners have no Anthropic auth, so
+# everything runs on OpenRouter: the content tier calls it directly, the tool tiers (Agent SDK)
+# go through the LiteLLM proxy in evals/proxy/. Models are hybrid — DeepSeek can't drive the
+# subagent-dispatch cases (evals/README.md), so the tool tiers default to Claude Haiku 4.5
+# (measured 2026-10-07: rules 5/5 vs 3/5 on Gemini Flash) — all three models are overridable
+# via workflow_dispatch inputs.
+#
+# ALL jobs are informational (continue-on-error): LLM evals are probabilistic and must never block
+# a merge. The `summary` job writes the real outcomes to the run summary. No push trigger: every
+# run costs real tokens, PR feedback is the point.
+name: evals
+
+on:
+  pull_request:
+    paths:
+      - '.claude/**'
+      - 'evals/**'
+      - '**/CLAUDE.md'
+      - '**/AGENTS.md'
+      - '.github/workflows/evals.yml'
+  workflow_dispatch:
+    inputs:
+      skill_model:
+        description: 'OpenRouter model for the skill tier (content-only, no tools)'
+        default: 'deepseek/deepseek-chat'
+      agent_model:
+        description: 'OpenRouter model for agent/workflow/rules tiers (tool-calling, via LiteLLM)'
+        default: 'anthropic/claude-haiku-4.5'
+      judge_model:
+        description: 'OpenRouter model for the LLM judge'
+        default: 'google/gemini-2.5-flash'
+
+permissions:
+  contents: read
+  actions: read # summary job reads real per-job conclusions via the API
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+# NOTE: the `env` and `runner` contexts are NOT available in job-level `env` blocks (only in
+# steps), so each job inlines `${{ inputs.x || '<default>' }}` directly. inputs.* is empty on
+# pull_request events, so the hybrid defaults apply there.
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skills: ${{ steps.detect.outputs.skills }}
+      agents: ${{ steps.detect.outputs.agents }}
+      run_workflow: ${{ steps.detect.outputs.run_workflow }}
+      run_rules: ${{ steps.detect.outputs.run_rules }}
+      skipped_skills: ${{ steps.detect.outputs.skipped_skills }}
+      skipped_agents: ${{ steps.detect.outputs.skipped_agents }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the merge-base against the PR base branch
+      - id: detect
+        env:
+          FORCE_ALL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            CHANGED_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD")"
+          else
+            CHANGED_FILES=""
+          fi
+          export CHANGED_FILES
+          node evals/scripts/ci-detect.mjs
+
+  static:
+    # Deterministic (no model calls). continue-on-error only to honor the "all eval jobs are
+    # informational" policy — remove it here if you ever want a hard gate on SKILL.md quality.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval:quality
+      - run: pnpm typecheck
+
+  skills:
+    # Content tier: skillTask and the judge both go through run-openrouter.ts (plain
+    # chat.completions, straight to OpenRouter) — no Agent SDK, no proxy.
+    needs: detect
+    if: needs.detect.outputs.skills != '[]' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJSON(needs.detect.outputs.skills) }}
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      EVAL_MODEL: ${{ inputs.skill_model || 'deepseek/deepseek-chat' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Trailing slash: vitest patterns are substring filters; "skills/<name>/" cannot match a
+      # sibling suite whose name merely starts with <name> (see src/repeat.ts).
+      - run: pnpm vitest run "skills/${{ matrix.skill }}/"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-skill-${{ matrix.skill }}
+          path: evals/results/
+          if-no-files-found: ignore
+
+  agents:
+    # Tool tier: Agent SDK speaks the Anthropic wire format, so it reaches OpenRouter through the
+    # LiteLLM proxy. The judge routes through the same proxy (it serves both API formats).
+    needs: detect
+    if: needs.detect.outputs.agents != '[]' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJSON(needs.detect.outputs.agents) }}
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_BASE_URL: http://localhost:4000
+      EVAL_MODEL: ${{ inputs.agent_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config # trace JSONL in a known dir (runner ctx not allowed here)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f proxy/docker-compose.yml up -d
+      - run: pnpm proxy:wait
+      - run: pnpm vitest run "agents/${{ matrix.agent }}/"
+      - if: failure()
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100
+      - if: always()
+        run: docker compose -f proxy/docker-compose.yml down
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-agent-${{ matrix.agent }}
+          path: evals/results/
+          if-no-files-found: ignore
+
+  workflow:
+    needs: detect
+    if: needs.detect.outputs.run_workflow == 'true' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_BASE_URL: http://localhost:4000
+      EVAL_MODEL: ${{ inputs.agent_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f proxy/docker-compose.yml up -d
+      - run: pnpm proxy:wait
+      - run: pnpm eval:workflow
+      - if: failure()
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100
+      - if: always()
+        run: docker compose -f proxy/docker-compose.yml down
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-workflow
+          path: evals/results/
+          if-no-files-found: ignore
+
+  rules:
+    needs: detect
+    if: needs.detect.outputs.run_rules == 'true' && (github.event.pull_request.head.repo.full_name || github.repository) == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_BASE_URL: http://localhost:4000
+      EVAL_MODEL: ${{ inputs.agent_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.judge_model || 'google/gemini-2.5-flash' }}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f proxy/docker-compose.yml up -d
+      - run: pnpm proxy:wait
+      - run: pnpm eval:rules
+      - if: failure()
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100
+      - if: always()
+        run: docker compose -f proxy/docker-compose.yml down
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-rules
+          path: evals/results/
+          if-no-files-found: ignore
+
+  summary:
+    # Non-blocking failures don't fail the run, so surface the real per-job outcomes here.
+    # Verified on the smoke PR: needs.<job>.result reports "success" for a job that failed under
+    # job-level continue-on-error, so the honest source is the jobs API (hence actions: read).
+    needs: [detect, static, skills, agents, workflow, rules]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: |
+          {
+            echo "## Evals (informational — never blocks merge)"
+            echo ""
+            echo "| job | result |"
+            echo "|---|---|"
+            gh run view "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs \
+              --jq '.jobs[] | select(.name != "summary") | "| \(.name) | \(.conclusion // .status) |"'
+            echo ""
+            [ -n "${{ needs.detect.outputs.skipped_skills }}" ] && echo "SKIP skills (no evals): ${{ needs.detect.outputs.skipped_skills }}"
+            [ -n "${{ needs.detect.outputs.skipped_agents }}" ] && echo "SKIP agents (no evals): ${{ needs.detect.outputs.skipped_agents }}"
+            true
+          } >> "$GITHUB_STEP_SUMMARY"

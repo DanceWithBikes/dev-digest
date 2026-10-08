@@ -41,6 +41,11 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useFindingAction: () => ({ mutate: state.findingActionMutate, isPending: false }),
 }));
 
+// FindingCard calls the eval-case mutation; no QueryClient in this suite.
+vi.mock("../../../../../../../lib/hooks/evals", () => ({
+  useCreateEvalCaseFromFinding: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
+}));
+
 import { DiffTab } from "./DiffTab";
 
 afterEach(() => {

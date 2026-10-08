@@ -210,8 +210,17 @@ function makeFakeRepo(skill: FakeSkill, versions: { version: number; body: strin
       }
       return skill;
     },
-    async countAgentsPerSkill() {
-      return new Map([[skill.id, 3]]);
+    async agentsPerSkill() {
+      return new Map([
+        [
+          skill.id,
+          [
+            { id: 'a1', name: 'alpha' },
+            { id: 'a2', name: 'beta' },
+            { id: 'a3', name: 'gamma' },
+          ],
+        ],
+      ]);
     },
     snapshots,
   };
@@ -264,6 +273,7 @@ describe('SkillsService.restore', () => {
     const service = new SkillsService(repo as unknown as SkillsRepository);
 
     expect((await service.restore('ws-1', 'skill-1', 1)).agent_count).toBe(3);
+    expect((await service.restore('ws-1', 'skill-1', 1)).agents.map((a) => a.name)).toEqual(['alpha', 'beta', 'gamma']);
   });
 
   it('404s on an unknown skill, on another workspace, and on a missing version', async () => {

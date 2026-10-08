@@ -83,6 +83,20 @@ export const s = {
     marginTop: 14,
     flexWrap: "wrap",
   } satisfies CSSProperties,
+  evalLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12.5,
+    fontWeight: 500,
+    color: "var(--accent)",
+    padding: "5px 9px",
+  } satisfies CSSProperties,
+  evalHint: {
+    alignSelf: "center",
+    fontSize: 11.5,
+    color: "var(--text-muted)",
+  } satisfies CSSProperties,
   composer: {
     marginTop: 12,
     display: "flex",

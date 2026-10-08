@@ -10,7 +10,7 @@
     { "cmd": ["find", "role", "button", "click", "--name", "Files changed"], "label": "switch to the Files changed tab" },
     { "cmd": ["wait", "--url", "tab=diff"], "label": "diff tab is active in the URL" },
     { "cmd": ["wait", "--text", "DOCS"], "label": "a Smart Diff role group header renders (README.md's group)" },
-    { "cmd": ["scroll", "down", "700", "--selector", "main"], "label": "scroll the Docs group into view (it scrolls inside main, not window)" },
+    { "cmd": ["scroll", "down", "5000", "--selector", "main"], "label": "scroll the Docs group into view (it scrolls inside main, not window)" },
     { "cmd": ["find", "text", "Docs", "click", "--exact"], "label": "collapse the Docs group" },
     { "cmd": ["wait", "--text", "1 files"], "label": "collapsed group shows its file-count summary" },
     { "cmd": ["find", "role", "button", "click", "--name", "Original order"], "label": "switch back to the flat, GitHub-ordered list" },

@@ -1,0 +1,77 @@
+{
+  "skill_name": "react-best-practices",
+  "evals": [
+    {
+      "id": 1,
+      "name": "agents-list-url-state-fetching-memoization",
+      "prompt": "Review this React component before it is merged. List every real problem you find, each with the file line, a severity (critical/high/medium) and a concrete fix. Do not edit the file and do not report style nitpicks.",
+      "expected_output": "Three findings: filter/pagination state kept in useState instead of URL search params, data fetched with axios inside a component effect without AbortController and outside a custom hook, and needless useMemo/useCallback on trivial work.",
+      "files": [
+        "evals/files/agents-list/AgentsList.tsx"
+      ],
+      "expectations": [
+        "Reports that `query`, `status` and `page` are URL-dependent state (filters/pagination) and belong in URL search params, not useState",
+        "Reports that the axios request is made directly in the component's useEffect: it has no AbortController/cleanup (race between responses) and data fetching should live in a custom hook such as the project's useApiQuery",
+        "Reports that `displayName` useMemo (string concatenation) and the `handleQueryChange` useCallback (passed to a DOM input, not a memo child) are unnecessary memoization",
+        "Rates the URL-state finding and the fetch/abort finding as high, not low"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "app-providers-context-wrapper-forwardref",
+      "prompt": "Review this React component before it is merged. List every real problem you find, each with the file line, a severity (critical/high/medium) and a concrete fix. Do not edit the file and do not report style nitpicks.",
+      "expected_output": "Three findings: one god Context holding unrelated state (user, theme, toasts, sidebar) that re-renders all consumers, a wrapper component that only calls a hook and returns null, and forwardRef used under React 19.",
+      "files": [
+        "evals/files/app-providers/AppProviders.tsx"
+      ],
+      "expectations": [
+        "Reports that AppContext mixes unrelated concerns (user, theme, toasts, sidebar) so every consumer re-renders on any change, and recommends splitting contexts by concern or moving local UI state out of Context",
+        "Reports that `PageViewTracker` only calls a hook/effect and renders null, so it is an unnecessary wrapper component and the tracking should be a hook called directly",
+        "Reports that `TextInput` uses forwardRef, which is unnecessary in React 19 where ref is a regular prop",
+        "Rates the Context misuse and the wrapper component as critical or high, and forwardRef as medium"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "pr-detail-nested-ternary-inline-style-error-boundary",
+      "prompt": "Review this React component before it is merged. List every real problem you find, each with the file line, a severity (critical/high/medium) and a concrete fix. Do not edit the file and do not report style nitpicks.",
+      "expected_output": "Three findings: nested ternary chain for loading/error/empty/success states instead of early returns, inline style={} object instead of Tailwind utilities, and an ErrorBoundary without resetKeys and without a Try again button.",
+      "files": [
+        "evals/files/pr-detail/PullRequestDetail.tsx"
+      ],
+      "expectations": [
+        "Reports the three-level nested ternary for loading/error/empty/success and recommends early returns or extracted components",
+        "Reports the inline `style={{ ... }}` object on the paragraph and recommends Tailwind utility classes",
+        "Reports that the ErrorBoundary has no `resetKeys` (for example [pathname]) and that CrashFallback has no 'Try again' button calling resetErrorBoundary",
+        "Rates the nested ternary and the error-boundary findings as high, and the inline style as medium"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "overview-tab-real-diff-pr-brief",
+      "prompt": "Review this diff from a merged pull request. List every real problem you find, each with the added line it concerns, a severity (critical/high/medium) and a concrete fix. Do not report style nitpicks and do not invent problems: if something is fine, leave it out.",
+      "expected_output": "Real diff of OverviewTab.tsx from commit e4a6f19 (PR Brief). Findings under this skill: a trivial-cost useMemo (new Set over files), the intent/risk-areas branching that tests `brief` twice and builds JSX in render-body variables, and a presentational tab that now fetches data itself.",
+      "files": [
+        "evals/files/overview-tab/OverviewTab.diff"
+      ],
+      "expectations": [
+        "Reports that the `changedPaths` useMemo (`new Set(files.map((f) => f.path))`) is unnecessary memoization because building the set is cheap, and quotes that line",
+        "Reports that the `intent` expression `brief && !brief.intent ? riskAreas : <IntentCard ... footer={brief ? riskAreas : undefined} />` tests `brief` twice and assigns JSX to local variables in the render body, and recommends an extracted component or explicit early branches",
+        "Reports that OverviewTab now calls the data hooks `usePrBrief` and `usePrReviews` itself while also laying out cards, mixing container and presentational work, and recommends moving the fetching into the parent or a dedicated container"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "overview-tab-negative-critical-only",
+      "prompt": "Review this diff from a merged pull request, but report ONLY CRITICAL issues: bugs, broken reconciliation, derived state stored in useState, render factories (camelCase functions returning JSX), unstable or index keys, or a falsy `0` rendered by `{count && ...}`. If there are none, say so explicitly instead of listing lower-severity items.",
+      "expected_output": "The diff has no critical issue, so the answer is an explicit 'no critical issues' verdict that names the categories it checked.",
+      "files": [
+        "evals/files/overview-tab/OverviewTab.diff"
+      ],
+      "expectations": [
+        "Contains an explicit sentence stating that no CRITICAL issue was found in the diff, and quotes it",
+        "Names at least three of the checked CRITICAL categories (derived state in useState, render factories, keys, falsy-0 rendering) and states that none of them occurs in the diff"
+      ]
+    }
+  ]
+}

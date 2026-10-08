@@ -21,6 +21,14 @@ import {
   Repo,
   PrDetail,
   PrMeta,
+  EvalExpectation,
+  EvalExpectedOutput,
+  EvalCaseUpsert,
+  EvalCaseFromFindingInput,
+  EvalBatch,
+  EvalCaseActual,
+  EvalAgentSummary,
+  EvalOverview,
 } from '@devdigest/shared';
 
 /**
@@ -391,5 +399,73 @@ describe('platform DTOs', () => {
 
     // Negative tallies and non-preview fields are rejected.
     expect(() => PrMeta.parse({ ...base, severity_counts: { critical: -1, warning: 0, suggestion: 0 } })).toThrow();
+  });
+});
+
+describe('eval-pipeline contracts', () => {
+  const exp = { kind: 'must_find', file: 'src/config.ts', start_line: 12, end_line: 12 };
+  const upsert = {
+    name: 'case',
+    input_diff: 'x',
+    expected_output: { expectations: [exp] },
+  };
+
+  it('parses a valid upsert and an expectation with optional fields', () => {
+    expect(EvalCaseUpsert.parse(upsert).expected_output.expectations).toHaveLength(1);
+    expect(EvalExpectation.parse({ ...exp, title: 't', severity: 'LEGACY', category: 'x' }).severity).toBe(
+      'LEGACY',
+    );
+  });
+
+  it('rejects empty expectations', () => {
+    expect(() => EvalExpectedOutput.parse({ expectations: [] })).toThrow();
+    expect(() => EvalCaseUpsert.parse({ ...upsert, expected_output: { expectations: [] } })).toThrow();
+  });
+
+  it('rejects start_line 0 and start_line > end_line', () => {
+    expect(() => EvalExpectation.parse({ ...exp, start_line: 0 })).toThrow();
+    expect(() =>
+      EvalCaseUpsert.parse({
+        ...upsert,
+        expected_output: { expectations: [{ ...exp, start_line: 5, end_line: 4 }] },
+      }),
+    ).toThrow();
+  });
+
+  it('caps input_diff at 200,000 characters', () => {
+    expect(EvalCaseUpsert.safeParse({ ...upsert, input_diff: 'a'.repeat(200_000) }).success).toBe(true);
+    expect(EvalCaseUpsert.safeParse({ ...upsert, input_diff: 'a'.repeat(200_001) }).success).toBe(false);
+  });
+
+  it('rejects an unknown kind and a non-uuid agent_id', () => {
+    expect(() => EvalExpectation.parse({ ...exp, kind: 'maybe' })).toThrow();
+    expect(() => EvalCaseFromFindingInput.parse({ agent_id: 'nope' })).toThrow();
+    expect(EvalCaseFromFindingInput.parse({})).toEqual({});
+  });
+
+  it('EvalCaseActual carries an optional expected_output snapshot', () => {
+    const actual = {
+      kept: [], dropped: [], matched_expectations: [], noise_finding_ids: [],
+      mode: 'single-pass', tokens_in: null, tokens_out: null,
+    };
+    expect(EvalCaseActual.parse(actual).expected_output).toBeUndefined();
+    const withExpected = { ...actual, expected_output: { expectations: [exp] } };
+    expect(EvalCaseActual.parse(withExpected).expected_output?.expectations).toHaveLength(1);
+    expect(EvalCaseActual.safeParse({ ...actual, expected_output: { expectations: [] } }).success).toBe(false);
+  });
+
+  it('EvalBatch round-trips and trend is capped at 10', () => {
+    const batch = {
+      id: 'b', agent_id: 'a', agent_version: 1, system_prompt: 'p', provider: 'openrouter', model: 'm',
+      skills: ['s'], status: 'done', error: null, ran_at: 't', finished_at: 't',
+      cases_total: 3, cases_passed: 1, must_find_total: 2, must_find_matched: 1, kept_total: 3,
+      noise_total: 1, dropped_total: 1, recall: 0.5, precision: 2 / 3, citation_accuracy: 0.75,
+      duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null,
+    };
+    expect(EvalBatch.parse(batch)).toEqual(batch);
+    const summary = { agent_id: 'a', name: 'n', model: 'm', cases_total: 1, latest_batch: null };
+    expect(EvalAgentSummary.safeParse({ ...summary, trend: Array(10).fill(batch) }).success).toBe(true);
+    expect(EvalAgentSummary.safeParse({ ...summary, trend: Array(11).fill(batch) }).success).toBe(false);
+    expect(EvalOverview.parse({ agents: [], recent_batches: [batch] }).recent_batches).toHaveLength(1);
   });
 });

@@ -5,6 +5,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
 import { ContextSelectionPanel } from "@/components/context-selection";
@@ -39,6 +40,20 @@ export function SkillConfigTab({ skill }: { skill: Skill }) {
 
   return (
     <div style={s.wrap}>
+      <section style={s.agentsSection}>
+        <h2 style={s.agentsTitle}>{t("usedBy.title")}</h2>
+        {skill.agents.length === 0 ? (
+          <p style={s.agentsEmpty}>{t("usedBy.empty")}</p>
+        ) : (
+          <div style={s.agentsList}>
+            {skill.agents.map((a) => (
+              <Link key={a.id} href={`/agents/${a.id}`} style={s.agentChip}>
+                {a.name}
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
       <SkillForm value={draft} onChange={setDraft} bodyRows={20} />
       <div style={s.actions}>
         <Button

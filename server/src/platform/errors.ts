@@ -47,7 +47,7 @@ export class RateLimitError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message = 'Conflict', details?: unknown) {
-    super('conflict', message, 409, details);
+  constructor(message = 'Conflict', details?: unknown, code = 'conflict') {
+    super(code, message, 409, details);
   }
 }

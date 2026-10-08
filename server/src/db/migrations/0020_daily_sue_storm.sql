@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "eval_batches_one_running_uq" ON "eval_batches" USING btree ("agent_id") WHERE "eval_batches"."status" = 'running';

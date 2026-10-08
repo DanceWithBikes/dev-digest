@@ -111,7 +111,8 @@
     "pr-self-review": "this skill",
     "engineering-insights": "authoring workflow for docs/insights.md, not a review lens",
     "mermaid-diagram": "authoring aid, not a review lens",
-    "workflow-retro": "run-cost retrospective, not a review lens"
+    "workflow-retro": "run-cost retrospective, not a review lens",
+    "dependency-checker": "dependency audit report, not a review lens"
   },
 
   "packageManagers": { "client": "pnpm", "server": "pnpm", "reviewer-core": "npm", "e2e": "npm" },

@@ -103,6 +103,10 @@ export const SkillSource = z.enum([
 ]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
+/** Minimal reference to an agent a skill is attached to. */
+export const SkillAgentRef = z.object({ id: z.string(), name: z.string() });
+export type SkillAgentRef = z.infer<typeof SkillAgentRef>;
+
 export const Skill = z.object({
   id: z.string(),
   name: z.string(),
@@ -119,6 +123,8 @@ export const Skill = z.object({
    * truth that drifts the moment a link is added anywhere else.
    */
   agent_count: z.number().int().default(0),
+  /** Which agents use this skill (same source as `agent_count`). */
+  agents: z.array(SkillAgentRef).default([]),
 });
 export type Skill = z.infer<typeof Skill>;
 

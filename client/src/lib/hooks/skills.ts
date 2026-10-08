@@ -7,6 +7,8 @@ import type {
   AgentSkillLink,
   Skill,
   SkillDraft,
+  SkillEvalsResponse,
+  SkillEvalSyncResponse,
   SkillType,
   SkillSource,
   SkillVersion,
@@ -130,6 +132,27 @@ export function useSetAgentSkills() {
       api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_ids: skillIds }),
     onSuccess: (_d, { agentId }) => {
       qc.invalidateQueries({ queryKey: ["agent-skills", agentId] });
+      // Skill cards list the agents using them.
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["skill"] });
     },
+  });
+}
+
+/** Latest eval results, summary and run history for one skill — the Evals tab. */
+export function useSkillEvals(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ["skill-evals", id],
+    queryFn: () => api.get<SkillEvalsResponse>(`/skills/${id}/evals`),
+    enabled: !!id,
+  });
+}
+
+/** Import the skill's records from the evals package, then refresh the tab. */
+export function useSyncSkillEvals() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<SkillEvalSyncResponse>(`/skills/${id}/evals/sync`),
+    onSuccess: (_d, id) => qc.invalidateQueries({ queryKey: ["skill-evals", id] }),
   });
 }

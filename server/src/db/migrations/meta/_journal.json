@@ -134,6 +134,27 @@
       "when": 1790983533546,
       "tag": "0018_legal_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791376607342,
+      "tag": "0019_yummy_rictor",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791391058762,
+      "tag": "0020_daily_sue_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791455780271,
+      "tag": "0021_long_puppet_master",
+      "breakpoints": true
     }
   ]
 }

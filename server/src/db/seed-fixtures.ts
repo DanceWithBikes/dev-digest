@@ -122,6 +122,36 @@ export const PR_484_CONTRACT: FixturePr = {
   ],
 };
 
+/**
+ * Stored patches for the two demo-PR #482 files the eval seed cases build on
+ * (SPEC-04 AC-64). The rest of #482 stays patch-less. `src/config.ts` carries the
+ * `sk_live_` literal on new-side line 12; `src/api/users.ts` adds new-side lines
+ * 45–51 (the N+1 loop) and removes 2 lines — matching the counts in `seed.ts`.
+ */
+export const PR_482_PATCHES: Record<'src/config.ts' | 'src/api/users.ts', string> = {
+  'src/config.ts': `@@ -8,3 +8,7 @@ export const config = {
+   port: Number(process.env.PORT ?? 3000),
+   env: process.env.NODE_ENV ?? 'development',
++  // Public API rate limiting + billing credentials
++  rateLimitMax: 100,
++  stripeSecretKey: 'sk_live_51H_EXAMPLE_DO_NOT_USE_0000',
++  rateLimitWindowMs: 60_000,
+ };`,
+  'src/api/users.ts': `@@ -43,5 +43,10 @@ export async function listUsers(req: Request) {
+   const users = await db.select().from(usersTable).limit(limit);
+   const result = [];
+-  const memberships = await loadMemberships(users);
+-  return users.map((u) => ({ ...u, memberships: memberships[u.id] }));
++  // one memberships query and one plan lookup per user
++  for (const u of users) {
++    const memberships = await db.select().from(membershipsTable).where(eq(membershipsTable.userId, u.id));
++    const plan = await loadPlan(u.accountId);
++    result.push({ ...u, memberships, plan });
++  }
++  return result;
+ }`,
+};
+
 export const FIXTURE_PRS: FixturePr[] = [PR_483_DISCOUNT, PR_484_CONTRACT];
 
 /**

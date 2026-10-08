@@ -1,3 +1,4 @@
+import { FileEvalRecordsSource, type EvalRecordsReader } from '../adapters/eval-records/file.js';
 import type {
   AuthProvider,
   SecretsProvider,
@@ -57,6 +58,8 @@ export interface ContainerOverrides {
   /** repo-intel T3 adapters — only the indexer pipeline reads these. */
   depgraph?: DepGraph;
   tokenizer?: Tokenizer;
+  /** Source of the evals package's records file (skills "Sync results"). */
+  evalRecords?: EvalRecordsReader;
 }
 
 export class Container {
@@ -97,6 +100,10 @@ export class Container {
     if (this.overrides.git) return this.overrides.git;
     this._git ??= new SimpleGitClient(this.config.cloneDir);
     return this._git;
+  }
+
+  get evalRecords(): EvalRecordsReader {
+    return (this.overrides.evalRecords ??= new FileEvalRecordsSource(this.config.evalRecordsPath));
   }
 
   get agentsRepo(): AgentsRepository {

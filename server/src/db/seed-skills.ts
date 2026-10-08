@@ -372,6 +372,28 @@ function importedSampleSkill(): SeedSkill {
 }
 
 /**
+ * A project skill (`.claude/skills/<dir>/SKILL.md`), read off disk
+ * and pushed through the import parser like the sample above. The studio never
+ * scans `.claude/skills`, so this is the only way it reaches the Skills list.
+ * The parser caps a long frontmatter description at 280 characters.
+ * Not attached to any agent: these are project skills for coding agents, not
+ * reviewer rubrics. Their eval suites live in `evals/skills/<dir>/`.
+ */
+function projectSkill(dir: string): SeedSkill {
+  const path = fileURLToPath(new URL(`../../../.claude/skills/${dir}/SKILL.md`, import.meta.url));
+  const draft = parseSkillMarkdown(readFileSync(path, 'utf8'), `${dir}.md`);
+
+  return {
+    name: draft.name,
+    description: draft.description,
+    type: draft.type,
+    body: draft.body,
+    source: 'imported_file',
+    attachTo: [],
+  };
+}
+
+/**
  * Every built-in skill, in the order the seed writes it.
  *
  * The API Contract Reviewer gets four narrow skills rather than one omnibus
@@ -442,5 +464,8 @@ export function buildSeedSkills(): SeedSkill[] {
       attachTo: [{ agent: 'API Contract Reviewer', order: 3 }],
     },
     importedSampleSkill(),
+    projectSkill('engineering-insights'),
+    // Seeded so the Evals tab can show its suite (`evals/skills/react-best-practices/`).
+    projectSkill('react-best-practices'),
   ];
 }

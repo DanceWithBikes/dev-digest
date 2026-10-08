@@ -64,3 +64,16 @@ export {
 // The single OpenAI-compatible structured provider (OpenRouter), shared by the
 // CI runner and the server's openrouter path. Owns session grouping + guards.
 export { OpenRouterProvider, type OpenRouterProviderOptions } from './llm/openrouter.js';
+
+// Unified-diff parser + per-file diff wrapper (moved from the server's git adapter).
+export { parseUnifiedDiff, fileDiff } from './diff/parse.js';
+
+// Eval scorers — pure matching + micro-averaged batch metrics (no model call, no I/O).
+export {
+  rangesIntersect,
+  matchesExpectation,
+  scoreCase,
+  scoreBatch,
+  type CaseScore,
+  type BatchScore,
+} from './eval/score.js';

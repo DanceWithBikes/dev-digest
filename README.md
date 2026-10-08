@@ -73,6 +73,8 @@ Each package has its own README with deeper diagrams:
 - **Agents** — two built-in reviewers (General + Security); create/edit your own (model + system prompt).
 - **Run a review** — single-pass analysis returning structured findings (severity + score), with the grounding gate and repo-map context working from the start.
 
+- **Eval pipeline** — turn a finding into an eval case in one click, run a frozen-input batch per agent, track recall / precision / citation accuracy per prompt version (agent Evals tab, `/eval` dashboard). `pnpm verify` at the repo root runs every check.
+
 ## What you build in the course
 
 These are intentionally **not** in the starter — each lesson adds one back:

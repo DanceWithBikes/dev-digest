@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import { Modal } from "@devdigest/ui";
 import { DiffViewer } from "@/components/diff-viewer";
 import { DIFF_PATH_SUFFIX } from "../../constants";
-import { toDiffFile } from "../../helpers";
+import { toDiffFile } from "@/lib/diff-text";
 import { s } from "./styles";
 
 export function VersionDiffModal({

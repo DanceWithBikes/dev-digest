@@ -1,11 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { SkillImportRequest, SkillRestoreRequest, SkillSource, SkillType } from '@devdigest/shared';
+import {
+  SkillEvalsResponse,
+  SkillEvalSyncResponse,
+  SkillImportRequest,
+  SkillRestoreRequest,
+  SkillSource,
+  SkillType,
+} from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
-import { makeSkillsService } from './compose.js';
+import { makeSkillEvalsService, makeSkillsService } from './compose.js';
 import { MAX_DESCRIPTION_CHARS, MAX_SKILL_BODY_CHARS } from './constants.js';
 
 /**
@@ -17,6 +24,8 @@ import { MAX_DESCRIPTION_CHARS, MAX_SKILL_BODY_CHARS } from './constants.js';
  *   DELETE /skills/:id          → delete (agent links cascade)
  *   GET    /skills/:id/versions → body history (newest first)
  *   POST   /skills/:id/restore  → re-apply an old body as a NEW version
+ *   GET    /skills/:id/evals    → latest eval results, summary and run history
+ *   POST   /skills/:id/evals/sync → import this skill's records from the evals package
  *   POST   /skills/parse        → parse markdown or a .zip into a draft; WRITES NOTHING
  *
  * `/skills/parse` is the preview half of import: it cannot persist, so the
@@ -38,6 +47,7 @@ const UpdateSkillBody = CreateSkillBody.omit({ source: true }).partial();
 export default async function skillsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const service = makeSkillsService(app.container);
+  const evals = makeSkillEvalsService(app.container);
 
   app.get('/skills', async (req) => {
     const { workspaceId } = await getContext(app.container, req);
@@ -103,6 +113,22 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
       return service.restore(workspaceId, req.params.id, req.body.version);
+    },
+  );
+
+  app.get('/skills/:id/evals', { schema: { params: IdParams, response: { 200: SkillEvalsResponse } } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    return evals.get(workspaceId, req.params.id);
+  });
+
+  app.post(
+    '/skills/:id/evals/sync',
+    { schema: { params: IdParams, response: { 200: SkillEvalSyncResponse } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const result = await evals.sync(workspaceId, req.params.id);
+      req.log.info({ skillId: req.params.id, ...result }, 'skill evals synced');
+      return result;
     },
   );
 }

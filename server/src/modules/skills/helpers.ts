@@ -1,5 +1,5 @@
 import { inflateRawSync } from 'node:zlib';
-import type { Skill, SkillDraft, SkillSource, SkillType, SkillVersion, SkillWarning } from '@devdigest/shared';
+import type { Skill, SkillAgentRef, SkillDraft, SkillSource, SkillType, SkillVersion, SkillWarning } from '@devdigest/shared';
 import { SkillType as SkillTypeSchema } from '@devdigest/shared';
 import { ValidationError } from '../../platform/errors.js';
 import {
@@ -49,12 +49,12 @@ export interface SkillVersionRecord {
 /**
  * Map a persisted skill row to the public `Skill` DTO.
  *
- * `agentCount` arrives as an argument because it lives in `agent_skills`, a
+ * `agents` arrives as an argument because it lives in `agent_skills`, a
  * table this module only reads: passing it in keeps the mapper pure and free of
  * the data layer (`domain-files-are-pure`), and keeps the count a derived
- * number rather than a column that could disagree with the link table.
+ * number (the list length) rather than a column that could disagree with the link table.
  */
-export function toSkillDto(row: SkillRecord, agentCount: number): Skill {
+export function toSkillDto(row: SkillRecord, agents: SkillAgentRef[]): Skill {
   return {
     id: row.id,
     name: row.name,
@@ -65,7 +65,8 @@ export function toSkillDto(row: SkillRecord, agentCount: number): Skill {
     enabled: row.enabled,
     version: row.version,
     evidence_files: row.evidenceFiles ?? null,
-    agent_count: agentCount,
+    agent_count: agents.length,
+    agents,
   };
 }
 

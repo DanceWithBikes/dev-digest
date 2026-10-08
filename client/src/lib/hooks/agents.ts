@@ -64,6 +64,7 @@ export function useUpdateAgent() {
     mutationFn: ({ id, patch }: UpdateAgentInput) => api.put<Agent>(`/agents/${id}`, patch),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["agents"] });
+      qc.invalidateQueries({ queryKey: ["skills"] }); // skill cards show agent names
       qc.setQueryData(["agent", data.id], data);
     },
   });
@@ -75,6 +76,7 @@ export function useDeleteAgent() {
     mutationFn: (id: string) => api.del<{ ok: boolean }>(`/agents/${id}`),
     onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["agents"] });
+      qc.invalidateQueries({ queryKey: ["skills"] });
       qc.removeQueries({ queryKey: ["agent", id] });
     },
   });

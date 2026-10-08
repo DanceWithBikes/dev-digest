@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { scoreCase, scoreBatch } from '@devdigest/reviewer-core';
 import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
@@ -9,7 +10,8 @@ import {
   TEST_QUALITY_REVIEWER_PROMPT,
   API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
-import { FIXTURE_PRS, PR_482_BRIEF } from './seed-fixtures.js';
+import { FIXTURE_PRS, PR_482_BRIEF, PR_482_PATCHES } from './seed-fixtures.js';
+import { SEED_EVAL_CASES, SEED_BATCHES } from './seed-eval-cases.js';
 import { buildSeedSkills, RETIRED_SKILL_NAMES } from './seed-skills.js';
 
 /** Default provider/model for the built-in reviewer agents. */
@@ -131,8 +133,20 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     await db.insert(t.prFiles).values([
       { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
       { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
+      {
+        prId: pr!.id,
+        path: 'src/config.ts',
+        additions: 4,
+        deletions: 0,
+        patch: PR_482_PATCHES['src/config.ts'],
+      },
+      {
+        prId: pr!.id,
+        path: 'src/api/users.ts',
+        additions: 7,
+        deletions: 2,
+        patch: PR_482_PATCHES['src/api/users.ts'],
+      },
       { prId: pr!.id, path: 'src/api/public/index.ts', additions: 5, deletions: 0 },
       { prId: pr!.id, path: 'README.md', additions: 12, deletions: 2 },
       { prId: pr!.id, path: 'pnpm-lock.yaml', additions: 18, deletions: 3 },
@@ -187,6 +201,15 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         confidence: 0.86,
       },
     ]);
+  }
+
+  // SPEC-04 AC-64: dev DBs seeded before the patches existed get them too. The seed
+  // never updates a row, so this is an explicit "only where empty" backfill.
+  for (const [path, patch] of Object.entries(PR_482_PATCHES)) {
+    await db
+      .update(t.prFiles)
+      .set({ patch })
+      .where(and(eq(t.prFiles.prId, pr!.id), eq(t.prFiles.path, path), isNull(t.prFiles.patch)));
   }
 
   // Cached PR Brief for #482. Own existence check (by pr_id), so dev DBs seeded
@@ -263,10 +286,131 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     if (!existing) await db.insert(t.agents).values(a);
   }
 
+  // SPEC-04 AC-65: the seeded #482 review predates agents — attribute it to the
+  // Security Reviewer, only where no agent is set.
+  const [securityAgent] = await db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'Security Reviewer')));
+  await db
+    .update(t.reviews)
+    .set({ agentId: securityAgent!.id })
+    .where(
+      and(
+        eq(t.reviews.prId, pr!.id),
+        eq(t.reviews.model, 'seed'),
+        eq(t.reviews.kind, 'review'),
+        isNull(t.reviews.agentId),
+      ),
+    );
+
   await seedSkills(db, workspaceId);
   await seedFixturePrs(db, workspaceId, repoId);
+  await seedEvalCases(db, workspaceId, securityAgent!);
 
   return { workspaceId, userId };
+}
+
+/**
+ * SPEC-04 — the Security Reviewer's 8 eval cases and 2 scored `seed` batches.
+ *
+ * Cases are idempotent by `(owner_id, name)`; batches by `(agent_id, model = 'seed')`.
+ * Batch counts and metrics are computed by the same scorers the runner uses, from
+ * the per-case outputs stored in `seed-eval-cases.ts` (AC-69).
+ */
+async function seedEvalCases(
+  db: Db,
+  workspaceId: string,
+  agent: typeof t.agents.$inferSelect,
+): Promise<void> {
+  const caseIdByName = new Map<string, string>();
+  for (const c of SEED_EVAL_CASES) {
+    let [row] = await db
+      .select()
+      .from(t.evalCases)
+      .where(and(eq(t.evalCases.ownerId, agent.id), eq(t.evalCases.name, c.name)));
+    if (!row) {
+      [row] = await db
+        .insert(t.evalCases)
+        .values({
+          workspaceId,
+          ownerKind: 'agent',
+          ownerId: agent.id,
+          name: c.name,
+          inputDiff: c.inputDiff,
+          inputMeta: c.inputMeta,
+          expectedOutput: { expectations: c.expectations },
+          notes: c.notes,
+          createdFrom: 'manual',
+        })
+        .returning();
+    }
+    caseIdByName.set(c.name, row!.id);
+  }
+
+  const [existingBatch] = await db
+    .select()
+    .from(t.evalBatches)
+    .where(and(eq(t.evalBatches.agentId, agent.id), eq(t.evalBatches.model, 'seed')));
+  if (existingBatch) return;
+
+  for (const def of SEED_BATCHES) {
+    const ranAt = new Date(Date.now() - def.daysAgo * 24 * 60 * 60 * 1000);
+    const scored = def.outputs.map((o) => {
+      const exps = SEED_EVAL_CASES.find((c) => c.name === o.caseName)!.expectations;
+      return { o, score: scoreCase(exps, o.kept, o.dropped.length) };
+    });
+    const total = scoreBatch(scored.map((x) => x.score));
+
+    const [batch] = await db
+      .insert(t.evalBatches)
+      .values({
+        workspaceId,
+        agentId: agent.id,
+        agentVersion: 1,
+        systemPrompt: def.promptSnapshot(agent.systemPrompt),
+        provider: agent.provider,
+        model: 'seed',
+        skills: [],
+        status: 'done',
+        ranAt,
+        finishedAt: new Date(ranAt.getTime() + def.durationMs),
+        casesTotal: total.cases_total,
+        casesPassed: total.cases_passed,
+        mustFindTotal: total.must_find_total,
+        mustFindMatched: total.must_find_matched,
+        keptTotal: total.kept_total,
+        noiseTotal: total.noise_total,
+        droppedTotal: total.dropped_total,
+        recall: total.recall,
+        precision: total.precision,
+        citationAccuracy: total.citation_accuracy,
+        durationMs: def.durationMs,
+      })
+      .returning();
+
+    await db.insert(t.evalRuns).values(
+      scored.map(({ o, score }) => ({
+        caseId: caseIdByName.get(o.caseName)!,
+        batchId: batch!.id,
+        ranAt,
+        actualOutput: {
+          kept: o.kept,
+          dropped: o.dropped,
+          matched_expectations: score.matched_expectations,
+          noise_finding_ids: score.noise_finding_ids,
+          mode: 'single-pass',
+          tokens_in: null,
+          tokens_out: null,
+        },
+        pass: score.pass,
+        recall: score.recall,
+        precision: score.precision,
+        citationAccuracy: score.citation_accuracy,
+        durationMs: Math.round(def.durationMs / def.outputs.length),
+      })),
+    );
+  }
 }
 
 /**

@@ -5,6 +5,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   Icon,
@@ -20,6 +21,7 @@ import {
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
+import { useTurnIntoEval } from "./useTurnIntoEval";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
 
@@ -50,6 +52,7 @@ export function FindingCard({
   const accepted = !!f.accepted_at;
   const dismissed = !!f.dismissed_at;
   const muted = accepted || dismissed;
+  const evalCase = useTurnIntoEval(f);
 
   return (
     <div data-finding-id={f.id} style={s.card(!!focused, sevColor, muted)}>
@@ -109,6 +112,26 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            {evalCase.ownerId ? (
+              <Link href={`/agents/${evalCase.ownerId}?tab=evals`} style={s.evalLink}>
+                <Icon.FlaskConical size={13} />
+                {t("finding.openEvals")}
+              </Link>
+            ) : (
+              <>
+                <Button
+                  kind="ghost"
+                  size="sm"
+                  icon="FlaskConical"
+                  disabled={evalCase.disabled}
+                  title={evalCase.hint}
+                  onClick={evalCase.turnIntoEval}
+                >
+                  {t("finding.turnIntoEval")}
+                </Button>
+                {evalCase.hint && <span style={s.evalHint}>{evalCase.hint}</span>}
+              </>
+            )}
           </div>
         </div>
       )}

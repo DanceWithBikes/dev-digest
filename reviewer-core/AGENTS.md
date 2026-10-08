@@ -11,6 +11,8 @@ npm run typecheck   # this IS the build: the package emits no JS
 - `src/grounding.ts` — `groundFindings` (citation check against the diff)
 - `src/llm/` — OpenRouter provider, structured output (Zod → JSON Schema, parse-with-repair)
 - `src/review/` — `run.ts` (`reviewPullRequest`), `reduce.ts` (map-reduce)
+- `src/diff/` — `parse.ts` (`parseUnifiedDiff`, `fileDiff`; unified-diff parser the server re-exports)
+- `src/eval/` — `score.ts` (`scoreCase`, `scoreBatch`, `matchesExpectation`; pure eval scoring, type-only imports)
 - `src/index.ts` — public API; consumers import only from here
 
 ## Invariants

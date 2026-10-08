@@ -8,6 +8,11 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
   useFindingAction: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
+// FindingCard calls the eval-case mutation; no QueryClient in this suite.
+vi.mock("../../../../../../../lib/hooks/evals", () => ({
+  useCreateEvalCaseFromFinding: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
+}));
+
 import { FindingsPanel } from "./FindingsPanel";
 
 afterEach(cleanup);

@@ -2,6 +2,8 @@ import type { CSSProperties } from "react";
 
 /** Co-located styles for SkillDetail. */
 export const s = {
+  split: { display: "flex", height: "calc(100vh - 52px)" } satisfies CSSProperties,
+  detail: { flex: 1, minWidth: 0, overflowY: "auto" } satisfies CSSProperties,
   loading: {
     padding: 28,
     display: "flex",
@@ -24,12 +26,6 @@ export const s = {
     padding: "1px 7px",
     borderRadius: 4,
   }),
-  backLink: {
-    marginLeft: "auto",
-    fontSize: 12.5,
-    color: "var(--text-secondary)",
-    textDecoration: "none",
-  } satisfies CSSProperties,
   tabBody: { padding: "20px 28px 48px", maxWidth: 940 } satisfies CSSProperties,
   markdown: {
     border: "1px solid var(--border)",

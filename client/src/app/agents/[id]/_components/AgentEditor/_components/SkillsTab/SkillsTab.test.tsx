@@ -15,6 +15,7 @@ const SKILLS: Skill[] = [
     source: "manual",
     enabled: true,
     agent_count: 1,
+    agents: [],
   },
   {
     id: "sk2",
@@ -26,6 +27,7 @@ const SKILLS: Skill[] = [
     source: "manual",
     enabled: false,
     agent_count: 0,
+    agents: [],
   },
 ];
 

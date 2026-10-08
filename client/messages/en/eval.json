@@ -28,12 +28,31 @@
       "cost": "Cost"
     },
     "pass": "pass",
-    "fail": "fail"
+    "fail": "fail",
+    "runAll": "Run all agents",
+    "run": "Run",
+    "openEvals": "Open Evals",
+    "noBatch": "No runs yet",
+    "agentColumn": "Agent",
+    "modelColumn": "Model",
+    "latestColumn": "Latest batch",
+    "latest": "v{version} · {date} · {passed}/{total} passed",
+    "runFailed": "{agent}: {message}",
+    "empty": "No agents yet.",
+    "recentColumns": {
+      "agent": "Agent",
+      "version": "Version",
+      "ranAt": "Ran at",
+      "status": "Status",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "cost": "Cost"
+    }
   },
   "caseEditor": {
     "newCase": "New eval case",
     "caseTitle": "Eval case · {name}",
-    "runCase": "Run case",
     "running": "Running…",
     "save": "Save",
     "saving": "Saving…",
@@ -50,12 +69,37 @@
     "bodyLabel": "Body",
     "bodyPlaceholder": "Wire up payments via Stripe SDK.",
     "preview": "Preview",
-    "expectedOutput": "Expected output",
-    "validJson": "valid JSON",
-    "invalidJson": "invalid JSON",
     "lastRunPassed": "Last run passed",
     "lastRunFailed": "Last run failed",
-    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s"
+    "resultSummary": "recall {recall}% · precision {precision}% · citation {citation}% · {duration}s",
+    "diffHint": "Paste a unified diff (with --- a/ and +++ b/ headers).",
+    "diffTooLarge": "The diff exceeds {max} characters.",
+    "notesLabel": "Notes",
+    "notesPlaceholder": "Why this case exists",
+    "expectationsLabel": "Expectations",
+    "addExpectation": "Add expectation",
+    "removeExpectation": "Remove",
+    "kind": "Kind",
+    "kinds": {
+      "mustFind": "must find",
+      "mustNotFlag": "must not flag"
+    },
+    "file": "File",
+    "filePlaceholder": "Select a file",
+    "startLine": "Start line",
+    "endLine": "End line",
+    "expectationTitle": "Title",
+    "previewEmpty": "No files parsed from the diff yet.",
+    "previewFiles": "{count, plural, one {# file} other {# files}} parsed",
+    "invalid": "Fix the highlighted fields to save.",
+    "invalidReasons": {
+      "name": "Name is required.",
+      "diff": "The diff must contain at least 1 file.",
+      "file": "Every expectation needs a file.",
+      "lines": "Lines must be 1 or more, and start must not exceed end."
+    },
+    "cancel": "Cancel",
+    "saveFailed": "Could not save the case: {message}"
   },
   "evalsTab": {
     "metricsTitle": "Eval metrics",
@@ -71,7 +115,44 @@
     "run": "Run",
     "running": "Running…",
     "edit": "Edit",
-    "delete": "Delete"
+    "delete": "Delete",
+    "runEvals": "Run evals ({count})",
+    "runEvalsRunning": "Running…",
+    "noRuns": "No runs yet. Create an eval case and run it.",
+    "cardRecall": "RECALL",
+    "cardPrecision": "PRECISION",
+    "cardCitation": "CITATION ACCURACY",
+    "cardPassed": "CASES PASSED",
+    "trendTitle": "Trend",
+    "trendTooltip": "Agent v{version} · cost {cost}",
+    "kinds": {
+      "mustFind": "must find",
+      "mustNotFlag": "must not flag"
+    },
+    "caseLastRun": "Last run",
+    "runHistory": {
+      "title": "Run history",
+      "empty": "No batches yet.",
+      "select": "Select batch {version} for compare",
+      "columns": {
+        "version": "Version",
+        "ranAt": "Ran at",
+        "status": "Status",
+        "recall": "Recall",
+        "precision": "Precision",
+        "citation": "Citation",
+        "passed": "Passed",
+        "cost": "Cost"
+      },
+      "status": {
+        "running": "running",
+        "done": "done",
+        "failed": "failed"
+      }
+    },
+    "compare": "Compare",
+    "deleteFailed": "Could not delete the case: {message}",
+    "runFailed": "Could not start the eval run: {message}"
   },
   "page": {
     "crumbSkillsLab": "Skills Lab",
@@ -80,5 +161,27 @@
     "crumbEvals": "Evals",
     "crumbNewCase": "New case",
     "crumbEvalCase": "Eval case"
+  },
+  "compare": {
+    "title": "Compare batches",
+    "older": "Older",
+    "newer": "Newer",
+    "delta": "Delta",
+    "loading": "Loading batches…",
+    "metric": "Metric",
+    "recall": "Recall",
+    "precision": "Precision",
+    "citation": "Citation accuracy",
+    "promptDiff": "System prompt diff",
+    "promptDiffPath": "system_prompt",
+    "noPromptChange": "The system prompts are identical.",
+    "close": "Close",
+    "failed": "Could not load the batches."
+  },
+  "notifications": {
+    "caseCreated": "Eval case created",
+    "caseSaved": "Eval case saved",
+    "caseDeleted": "Eval case deleted",
+    "runStarted": "Eval run started"
   }
 }

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { SkillSource, SkillType } from '@devdigest/shared';
@@ -9,7 +9,7 @@ import { isBodyChange } from './helpers.js';
  * Skills data-access. Owns `skills` and `skill_versions`. The `agent_skills`
  * link table is owned by the agents module (it owns the agent side: link,
  * reorder, list-for-an-agent) — deleting a skill here cascades those rows, and
- * `countAgentsPerSkill` READS it. A read-only count is not co-ownership: this
+ * `agentsPerSkill` READS it. A read-only lookup is not co-ownership: this
  * module never inserts, updates or deletes a link, so the agents module remains
  * the only writer and there is no second place that has to keep the two in sync.
  * Workspace-scoped throughout.
@@ -56,28 +56,40 @@ export class SkillsRepository {
   }
 
   /**
-   * How many agents each skill is attached to, as `skillId → count`.
+   * Which agents each skill is attached to, as `skillId → [{ id, name }]`
+   * (agents ordered by name; `agent_count` is the array length).
    *
-   * ONE grouped query for the whole page, not one per skill: the list endpoint
-   * would otherwise fire N+1 counts. Joined onto `skills` so the workspace scope
-   * comes from the table this module owns — `agent_skills` has no workspace_id.
+   * ONE query for the whole page, not one per skill: the list endpoint would
+   * otherwise fire N+1 lookups. Scoped by BOTH `skills.workspace_id` and
+   * `agents.workspace_id` — `agent_skills` has no workspace_id of its own.
    * Skills with no links are simply absent from the map; the caller defaults
-   * them to 0 rather than paying for an outer join.
+   * them to `[]` rather than paying for an outer join.
    */
-  async countAgentsPerSkill(workspaceId: string, skillIds?: string[]): Promise<Map<string, number>> {
+  async agentsPerSkill(
+    workspaceId: string,
+    skillIds?: string[],
+  ): Promise<Map<string, { id: string; name: string }[]>> {
     if (skillIds?.length === 0) return new Map();
     const rows = await this.db
-      .select({ skillId: t.agentSkills.skillId, agents: count() })
+      .select({ skillId: t.agentSkills.skillId, id: t.agents.id, name: t.agents.name })
       .from(t.agentSkills)
       .innerJoin(t.skills, eq(t.skills.id, t.agentSkills.skillId))
+      .innerJoin(t.agents, eq(t.agents.id, t.agentSkills.agentId))
       .where(
         and(
           eq(t.skills.workspaceId, workspaceId),
+          eq(t.agents.workspaceId, workspaceId),
           ...(skillIds ? [inArray(t.agentSkills.skillId, skillIds)] : []),
         ),
       )
-      .groupBy(t.agentSkills.skillId);
-    return new Map(rows.map((r) => [r.skillId, Number(r.agents)]));
+      .orderBy(asc(t.agents.name));
+    const byskill = new Map<string, { id: string; name: string }[]>();
+    for (const r of rows) {
+      const list = byskill.get(r.skillId) ?? [];
+      list.push({ id: r.id, name: r.name });
+      byskill.set(r.skillId, list);
+    }
+    return byskill;
   }
 
   /** Insert a skill AND record version 1 in skill_versions (immutable snapshot). */

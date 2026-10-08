@@ -38,3 +38,11 @@ describe("sidebar nav (Onboarding Tour)", () => {
     expect(item.key).toBe(activeKeyFor("/repos/r42/onboarding"));
   });
 });
+
+describe("sidebar nav (Eval Dashboard)", () => {
+  it("lists the eval entry at /eval with the g e shortcut", () => {
+    const item = NAV.flatMap((g) => g.items).find((i) => i.key === "eval")!;
+    expect(item.href).toBe("/eval");
+    expect(item.gKey).toBe("e");
+  });
+});

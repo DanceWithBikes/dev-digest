@@ -60,13 +60,14 @@ const SKILL: Skill = {
   enabled: true,
   version: 1,
   agent_count: 0,
+  agents: [],
 } as Skill;
 
-function renderTab() {
+function renderTab(skill: Skill = SKILL) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ skills: skillsMessages, context: contextMessages }}>
       <ToastProvider>
-        <SkillConfigTab skill={SKILL} />
+        <SkillConfigTab skill={skill} />
       </ToastProvider>
     </NextIntlClientProvider>,
   );
@@ -96,5 +97,26 @@ describe("SkillConfigTab — Project context to use", () => {
     const saves = screen.getAllByRole("button", { name: "Save" });
     fireEvent.click(saves[saves.length - 1]!);
     expect(state.saveSkill.mock.calls[0]![0]).toEqual(["docs/rubric.md", "docs/removed.md", "docs/other.md"]);
+  });
+});
+
+describe("SkillConfigTab — Used by agents", () => {
+  it("lists the agents using the skill, each linking to its page", () => {
+    renderTab({
+      ...SKILL,
+      agent_count: 2,
+      agents: [
+        { id: "a1", name: "security-reviewer" },
+        { id: "a2", name: "style-reviewer" },
+      ],
+    });
+    expect(screen.getByText("Used by agents")).toBeInTheDocument();
+    expect(screen.getByText("security-reviewer").closest("a")).toHaveAttribute("href", "/agents/a1");
+    expect(screen.getByText("style-reviewer").closest("a")).toHaveAttribute("href", "/agents/a2");
+  });
+
+  it("says so when no agent uses the skill", () => {
+    renderTab();
+    expect(screen.getByText(/Not attached to any agent yet/)).toBeInTheDocument();
   });
 });

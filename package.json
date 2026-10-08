@@ -1,0 +1,10 @@
+{
+  "name": "dev-digest",
+  "private": true,
+  "description": "Root task runner only — no workspace, each package keeps its own lockfile.",
+  "scripts": {
+    "verify": "bash scripts/verify.sh",
+    "verify:l06": "bash scripts/verify.sh",
+    "verify:it": "bash scripts/verify.sh --it"
+  }
+}

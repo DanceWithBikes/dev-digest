@@ -27,12 +27,13 @@ flowchart TD
   ONB["/onboarding<br/>add repo"] -->|"POST /repos"| API[("Fastify API")]
   PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)<br/>?tab= · ?file= (Files changed target)"]
 
-  AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config)"]
+  AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · Evals tab)"]
+  EVAL["/eval<br/>Eval Dashboard"] -->|"GET /eval/overview"| API
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
   PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>GET · POST /pulls/:id/brief<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
-  AGENTS -->|"/agents · /agents/:id"| API
+  AGENTS -->|"/agents · /agents/:id<br/>Evals tab: /agents/:id/eval-cases · /eval-runs · /eval-cases/:id"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
 

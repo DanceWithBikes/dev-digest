@@ -84,13 +84,31 @@ describe('imported sample skill', () => {
   });
 
   it('is seeded with provenance imported_file, from the file rather than a constant', () => {
-    const imported = skills.filter((s) => s.source === 'imported_file');
+    const imported = skills.filter((s) => s.name === 'no-over-mocking');
 
     expect(imported).toHaveLength(1);
-    expect(imported[0]!.name).toBe('no-over-mocking');
+    expect(imported[0]!.source).toBe('imported_file');
     expect(imported[0]!.body).toBe(
       parseSkillMarkdown(readSkillSample(NO_OVER_MOCKING_SAMPLE), NO_OVER_MOCKING_SAMPLE).body,
     );
     expect(imported[0]!.attachTo).toEqual([{ agent: 'Test Quality Reviewer', order: 3 }]);
+  });
+});
+
+describe.each(['engineering-insights', 'react-best-practices'])('%s project skill', (name) => {
+  const skill = byName.get(name);
+
+  it('is seeded from .claude/skills via the import parser, attached to no agent', () => {
+    expect(skill).toBeDefined();
+    expect(skill!.source).toBe('imported_file');
+    expect(skill!.attachTo).toEqual([]);
+    expect(skill!.body.trim()).not.toBe('');
+    // Frontmatter must not leak into the body.
+    expect(skill!.body).not.toContain('description:');
+  });
+
+  it('has a description within the 280-char limit', () => {
+    expect(skill!.description.trim()).not.toBe('');
+    expect(skill!.description.length).toBeLessThanOrEqual(280);
   });
 });

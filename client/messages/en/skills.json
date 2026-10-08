@@ -26,7 +26,13 @@
     "disabled": "disabled",
     "enableLabel": "Enable {name}",
     "agentCount": "{count, plural, =0 {No agents} one {1 agent} other {# agents}}",
+    "usedBy": "Used by",
+    "moreAgents": "+{count} more",
     "deleteLabel": "Delete {name}"
+  },
+  "usedBy": {
+    "title": "Used by agents",
+    "empty": "Not attached to any agent yet. Attach it from an agent's Skills tab."
   },
   "delete": {
     "title": "Delete this skill?",
@@ -67,12 +73,58 @@
   },
   "detail": {
     "fallbackCrumb": "Skill",
-    "backToLibrary": "← Back to all skills",
     "loadError": "This skill could not be loaded.",
     "tabs": {
       "config": "Config",
       "preview": "Preview",
+      "evals": "Evals",
       "versioning": "Versioning"
+    }
+  },
+  "evals": {
+    "heading": "Eval cases",
+    "passing": "{passing} / {total} passing",
+    "latestRun": "Latest run {when}",
+    "sync": "Sync results",
+    "syncing": "Syncing…",
+    "syncedToast": "Imported {imported} results.",
+    "syncedNothingToast": "No eval results found to import.",
+    "syncFailed": "Could not sync eval results.",
+    "loadError": "Could not load the eval results.",
+    "emptyTitle": "No eval results yet",
+    "emptyBody": "Run this skill's eval suite, then press Sync results to import it:",
+    "emptyCommand": "cd evals && pnpm vitest run \"skills/{name}/\"",
+    "pass": "Passed",
+    "fail": "Failed",
+    "score": "Score {score} / threshold {threshold}",
+    "scoreNoThreshold": "Score {score}",
+    "noScore": "No score",
+    "grounded": "Grounded {value}",
+    "expand": "Show practices for {name}",
+    "collapse": "Hide practices for {name}",
+    "noPractices": "No per-practice verdicts were recorded for this case.",
+    "practicePassed": "Practice met",
+    "practiceFailed": "Practice not met",
+    "evidenceLabel": "Judge evidence",
+    "noEvidence": "No evidence quoted.",
+    "history": {
+      "title": "Run history",
+      "empty": "No runs recorded.",
+      "trendTitle": "Average score by run",
+      "trendSeries": "Average score",
+      "columns": {
+        "ranAt": "Ran at",
+        "config": "Config",
+        "passed": "Passed",
+        "avgScore": "Avg score",
+        "gitSha": "Git"
+      },
+      "config": {
+        "candidate": "Candidate",
+        "baseline": "Baseline"
+      },
+      "dirty": "uncommitted changes",
+      "dirtyMark": "dirty"
     }
   },
   "versions": {

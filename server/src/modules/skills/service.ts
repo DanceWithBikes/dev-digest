@@ -47,15 +47,15 @@ export class SkillsService {
 
   async list(workspaceId: string): Promise<Skill[]> {
     const rows = await this.repo.list(workspaceId);
-    const counts = await this.repo.countAgentsPerSkill(workspaceId);
-    return rows.map((row) => toSkillDto(row, counts.get(row.id) ?? 0));
+    const agents = await this.repo.agentsPerSkill(workspaceId);
+    return rows.map((row) => toSkillDto(row, agents.get(row.id) ?? []));
   }
 
   async get(workspaceId: string, id: string): Promise<Skill | undefined> {
     const row = await this.repo.getById(workspaceId, id);
     if (!row) return undefined;
-    const counts = await this.repo.countAgentsPerSkill(workspaceId, [id]);
-    return toSkillDto(row, counts.get(id) ?? 0);
+    const agents = await this.repo.agentsPerSkill(workspaceId, [id]);
+    return toSkillDto(row, agents.get(id) ?? []);
   }
 
   async create(workspaceId: string, input: CreateSkillInput): Promise<Skill> {
@@ -69,7 +69,7 @@ export class SkillsService {
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
     });
     // A skill that did not exist a moment ago cannot be attached to an agent yet.
-    return toSkillDto(row, 0);
+    return toSkillDto(row, []);
   }
 
   async update(
@@ -79,8 +79,8 @@ export class SkillsService {
   ): Promise<Skill | undefined> {
     const row = await this.repo.update(workspaceId, id, patch);
     if (!row) return undefined;
-    const counts = await this.repo.countAgentsPerSkill(workspaceId, [id]);
-    return toSkillDto(row, counts.get(id) ?? 0);
+    const agents = await this.repo.agentsPerSkill(workspaceId, [id]);
+    return toSkillDto(row, agents.get(id) ?? []);
   }
 
   /** Delete a skill; every agent_skills link to it cascades away. */
@@ -123,8 +123,8 @@ export class SkillsService {
 
     const row = await this.repo.update(workspaceId, id, { body: snapshot.body });
     if (!row) throw new NotFoundError('Skill not found');
-    const counts = await this.repo.countAgentsPerSkill(workspaceId, [id]);
-    return toSkillDto(row, counts.get(id) ?? 0);
+    const agents = await this.repo.agentsPerSkill(workspaceId, [id]);
+    return toSkillDto(row, agents.get(id) ?? []);
   }
 
   /**

@@ -26,3 +26,6 @@ test-results/
 
 # skill eval run results (fixtures and evals.json live inside each skill)
 .claude/skill-evals/*/iteration-*/
+
+# root task runner (package.json has no deps; pnpm run writes an empty lockfile)
+/pnpm-lock.yaml

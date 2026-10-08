@@ -39,6 +39,9 @@ WEB_PORT="${E2E_WEB_PORT:-3100}"
 # an IPv6 ::1 vs published-IPv4 mismatch against the container.
 export DATABASE_URL="postgres://${PG_USER}:${PG_PASS}@127.0.0.1:${PG_PORT}/${PG_DB}"
 export API_PORT WEB_PORT
+# 13 flows in a row exceed the API's default 120 requests/minute (the Evals tab
+# got 429s in flow 13); the hermetic stack is single-user, so lift the cap.
+export RATE_LIMIT_MAX="${E2E_RATE_LIMIT_MAX:-2000}"
 export NEXT_PUBLIC_API_BASE="http://localhost:${API_PORT}"
 export E2E_BASE_URL="http://localhost:${WEB_PORT}"
 

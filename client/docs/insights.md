@@ -41,6 +41,15 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `src/components/findings-summary/helpers.ts:43` (pair-only emphasis regex in `plainText`, declared at `:37`), `src/components/findings-summary/helpers.test.ts:61` (the pinning test)
 
 ## Codebase Patterns
+- **2026-10-11 · `FindingCard`'s accordion header is `role="button"` on a div on purpose** — The header contains the file `MonoLink`, so a native `<button>` would nest interactive elements. The header handles Enter/Space itself and ignores keys whose target is not the header, so the inner link keeps its own keys. Don't "fix" it into a `<button>`.
+  Where: `src/components/finding-card/FindingCard.tsx:65` (`role="button"`)
+
+- **2026-10-11 · Each `EventSource` holds one of the browser's 6 HTTP/1.1 connections to the API origin** — The dev API (:3001) is plain HTTP/1.1, so 6 concurrent SSE streams (one per run) starve every other fetch to that host: polling, POSTs and the trace drawer stay pending. Open a stream only for runs that are actually `running` (the executor caps those at 4), not for `queued` ones; the server replays the buffer when a stream opens later.
+  Where: `src/lib/hooks/reviews.ts:198` (`useRunEvents`)
+
+- **2026-10-11 · Promoting a component out of `pulls/[number]/_components` breaks its relative imports AND its test mocks** — The route components reach `lib/` via 7-level `../../../../../../../lib/...` paths. After a move both the imports and the `vi.mock(...)` paths must switch to the `@/lib/...` alias together, because `vi.mock` only intercepts the exact specifier the component imports — a mismatch silently runs the real hook. Move with `git mv` so the diff shows a rename, not delete + untracked.
+  Where: `src/components/finding-card/FindingCard.test.tsx:15` (`vi.mock("@/lib/hooks/evals")`)
+
 - **2026-10-07 · Sidebar nav labels come from `nav.ts` literals; `messages/en/shell.json` `nav.*` feeds only the command palette** — Adding a nav entry means two copies of the same label: `NAV[].label` (rendered by the sidebar `NavItem` via `item.label`) and `shell.json` `nav.<key>` (read by `useShellCommands` for the "Go to …" palette item), plus a `SHORTCUTS[].label` literal for the shortcuts help. A rule like "every new UI string lives in `messages/en/*.json`" (NFR-8 of SPEC-04) is therefore not literally satisfiable for nav items without refactoring `NavItem` to `useTranslations("shell")`; spec it as an explicit exception or do the refactor, do not half-move one label.
   Where: `src/vendor/ui/nav.ts:40` (`label: "Eval Dashboard"`), `src/vendor/ui/nav.ts:72` (`SHORTCUTS`), `src/vendor/ui/shell/NavItem.tsx:54` (`item.label`), `src/components/app-shell/hooks/useShellCommands.ts:24` (`t(\`nav.${it.key}\`)`)
 - **2026-10-05 · `VerdictBanner` is shared by the Agent runs banner and the PR Brief header, and it hides a zero blockers count** — With `blockers === 0` it renders no blockers text at all, not "0 blockers". A spec that says a header "shows the blockers count" is therefore only Partially met (SPEC-03 AC-58 had to be amended and AC-86 added). Changing that guard changes both screens. Write criteria as "blockers count when non-zero", or add a brief-only prop.
@@ -72,6 +81,18 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   **Correction (2026-09-19):** the real clamp is `Math.min(focusIdx, Math.max(shown.length - 1, 0))` — the inner `Math.max` keeps `focus` at 0 instead of -1 when the filter leaves nothing to show.
 
 ## Tool & Library Notes
+- **2026-10-11 · Vendor `Checkbox` has no `disabled` prop** — To cap a selection (SPEC-06: 6 agents per run) wrap it in an element with `aria-disabled`, `opacity: 0.5`, `pointerEvents: "none"`, AND guard the toggle handler, since keyboard activation bypasses `pointerEvents`.
+  Where: `src/vendor/ui/kit/Checkbox.tsx:5` (`Checkbox`)
+
+- **2026-10-11 · Vendor `Tabs` and `Toggle` cannot carry `data-*`/`aria-*` per item** — `Tabs` renders its tab buttons itself from a plain `{id,label}` list, so a hook placed on the active panel always counts 1. For e2e counting, render a marker per item in the route component (or count the tab buttons inside the Tabs container); give `Toggle` its accessible name by wrapping it in a `<label>`.
+  Where: `src/vendor/ui/kit/Tabs.tsx:25` (`Tabs` tab buttons)
+
+- **2026-10-11 · RTL `rerender` with the SAME element object is a no-op; `arch:check` also polices test imports** — React bails out when `rerender(el)` gets the identical JSX object, so a state-driven assertion can falsely pass on text that already exists elsewhere in the DOM: build a fresh element per `rerender`. Separately, `enter-shared-components-through-index` applies to `*.test.tsx` too, so `vi.importActual("@/components/x/helpers")` fails the gate: import through `@/components/x`.
+  Where: `.dependency-cruiser.cjs:81` (`enter-shared-components-through-index`)
+
+- **2026-10-11 · `pnpm dev` in client hard-codes `-p 3000` and ignores `PORT`** — To run a second, throwaway Next dev server (e.g. to compile new routes once for the new-route typecheck workaround while the user's stack holds :3000), call `./node_modules/.bin/next dev -p <port>` directly and stop it afterwards.
+  Where: `package.json:6` (`"dev": "next dev -p 3000"`)
+
 - **2026-10-03 · Test tooling gaps: Vitest 2.1 has no `toHaveBeenCalledExactlyOnceWith`, and jsdom has no `Element.prototype.scrollIntoView`** — The matcher fails at both typecheck and runtime, so use `toHaveBeenCalledWith(…)` plus `toHaveBeenCalledTimes(1)`. Any component that scrolls a target into view throws under jsdom unless the test stubs `Element.prototype.scrollIntoView = vi.fn()`.
   Where: `src/components/diff-viewer/FileCard/FileCard.test.tsx:15` (`scrollIntoView` stub), `package.json` (`vitest`)
 - **2026-10-03 · TanStack Query `useMutation` resets `isError` as soon as `mutate` runs again, so a Retry button gated on `isError` unmounts while its own request is pending** — Any spinner meant for "the Retry I just clicked" disappears with the button. In the PR Brief section, the Retry click's spinner is therefore shown on the button that stays mounted (Generate or Regenerate). Put pending feedback on a control that is not conditional on `isError`.
@@ -112,7 +133,7 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `.dependency-cruiser.cjs:65` (`from.path` of `enter-route-components-through-index`), `.dependency-cruiser.cjs:20` (`FOLDER_SHARED_FILES`), `package.json:10` (`arch:check`), `../.github/workflows/client.yml:53`
 
 - **2026-09-18 · `borderColor` is itself a shorthand — React warns when it meets `borderLeftColor`** — `FindingCard` styled its focus ring with `borderColor` + a severity `borderLeftColor` and logged "Updating a style property during rerender (borderColor) when a conflicting property is set (borderLeftColor)" on every re-render (j/k navigation, and now severity filtering). The existing all-longhand comment there was not enough: `borderColor` sets all four sides. Fix: set `borderTopColor`/`borderRightColor`/`borderBottomColor` individually.
-  Where: `src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/styles.ts:12` (`borderTopColor`; Right/Bottom at `:13`/`:14`, `borderLeftColor` at `:17`)
+  Where: `src/components/finding-card/styles.ts:12` (`borderTopColor`; Right/Bottom at `:13`/`:14`, `borderLeftColor` at `:17`)
 
 ## Recurring Errors & Fixes
 

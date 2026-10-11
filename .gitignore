@@ -1,9 +1,8 @@
 node_modules/
 dist/
-# agent-runner ships as a JS GitHub Action — its bundled dist/ MUST be committed
-# (GitHub runs action.yml `main: dist/index.js` as-is, with no build step).
-!agent-runner/dist/
-!agent-runner/dist/**
+# agent-runner/dist/ is built locally (cd agent-runner && pnpm build) and read by the
+# server's CI export, which commits it into the target repo; it is git-ignored here
+# via agent-runner/.gitignore.
 build/
 .next/
 out/

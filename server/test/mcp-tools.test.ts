@@ -95,6 +95,7 @@ const review: ReviewRecord = {
       review_id: REVIEW_ID,
       accepted_at: null,
       dismissed_at: null,
+      learned_at: null,
     },
     {
       id: 'f-warning',
@@ -114,6 +115,7 @@ const review: ReviewRecord = {
       review_id: REVIEW_ID,
       accepted_at: null,
       dismissed_at: null,
+      learned_at: null,
     },
   ],
 };

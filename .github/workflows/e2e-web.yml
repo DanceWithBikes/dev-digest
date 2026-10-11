@@ -15,12 +15,14 @@ on:
       - 'client/**'
       - 'server/**'
       - 'e2e/**'
+      - 'agent-runner/**'
       - '.github/workflows/e2e-web.yml'
   pull_request:
     paths:
       - 'client/**'
       - 'server/**'
       - 'e2e/**'
+      - 'agent-runner/**'
       - '.github/workflows/e2e-web.yml'
 
 permissions:
@@ -62,6 +64,16 @@ jobs:
           done
           [ "$(docker inspect -f '{{.State.Health.Status}}' devdigest-postgres)" = "healthy" ]
 
+      # The API imports @devdigest/reviewer-core's RAW source at runtime (tsx
+      # resolves the tsconfig alias to ../reviewer-core/src), and that source
+      # imports `openai`/`zod`. Without reviewer-core's deps the API crashes at
+      # boot with ERR_MODULE_NOT_FOUND and never becomes healthy. db:seed imports
+      # it too (scoreCase/scoreBatch), so this must run BEFORE the seed step. reviewer-core
+      # uses npm (see reviewer-core.yml).
+      - name: Install reviewer-core deps
+        working-directory: reviewer-core
+        run: npm ci
+
       # --- API: install, migrate, seed, then start in the background ---
       - name: Install + migrate + seed (server)
         working-directory: server
@@ -70,17 +82,22 @@ jobs:
           pnpm db:migrate
           pnpm db:seed
 
-      # The API imports @devdigest/reviewer-core's RAW source at runtime (tsx
-      # resolves the tsconfig alias to ../reviewer-core/src), and that source
-      # imports `openai`/`zod`. Without reviewer-core's deps the API crashes at
-      # boot with ERR_MODULE_NOT_FOUND and never becomes healthy. reviewer-core
-      # uses npm (see reviewer-core.yml).
-      - name: Install reviewer-core deps
-        working-directory: reviewer-core
-        run: npm ci
+      # The ci module serves the runner bundle from agent-runner/dist/index.js,
+      # which is gitignored, so build it (needs reviewer-core's deps above).
+      - name: Build agent-runner bundle
+        working-directory: agent-runner
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
 
       - name: Start API (:3001)
         working-directory: server
+        env:
+          DEVDIGEST_CI_GITHUB_MOCK: 'true'
+          # The suite's PR-page polling exceeds the default 120 req/min global
+          # limit by flow 13 (429s, see e2e/docs/insights.md); scripts/e2e.sh
+          # sets the same value for the hermetic run.
+          RATE_LIMIT_MAX: '2000'
         run: |
           # tsx directly (not `pnpm start`): the committed package.json's start
           # is `node dist/server.js`, which would need a build first. tsx runs

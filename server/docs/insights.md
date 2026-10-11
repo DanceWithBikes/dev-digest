@@ -11,6 +11,12 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `src/db/schema/knowledge.ts:31` (`conventions`), `src/db/migrations/0011_dark_reaper.sql:1` (the ADDs), `src/db/migrations/0012_sparkling_thena.sql:1` (the DROP), `package.json` (`db:generate`)
 
 ## Codebase Patterns
+- **2026-10-11 · A new required field on `FindingRecord` breaks `test/mcp-tools.test.ts` only at runtime** — Its fixtures are loosely typed, so `pnpm typecheck` stays green and the MCP output schema rejects them (3 failures) only in the unit run. The client copy breaks at typecheck instead. After a `FindingRecord`/`review-api.ts` change, run the server unit suite, not just typecheck.
+  Where: `test/mcp-tools.test.ts:98` (`learned_at: null` fixture)
+
+- **2026-10-11 · A body-shape rule that must answer 400 needs an explicit `AppError` mapping — a bare `Schema.parse` answers 422** — The global error handler maps any `ZodError` to 422. Routes like `POST /pulls/:id/review` parse the body by hand, so a spec criterion demanding 400 for a malformed body must `safeParse` and throw `new AppError(code, msg, 400)` itself.
+  Where: `src/modules/reviews/routes.ts:34` (`RunRequest.parse`), `src/app.ts:149` (`isZodError`)
+
 - **2026-10-07 · A route that needs a specific 409 reason code cannot use `ConflictError` — its `code` is hard-wired to `conflict`** — `ConflictError` (like every subclass in `platform/errors.ts`) fixes the envelope's `error.code`; only the message varies. When the studio must branch on the reason (SPEC-04: `finding_undecided`, `no_agent`, `no_patch`, `no_eval_cases`, `batch_running`), throw `new AppError('<code>', message, 409)` directly — the base class takes `(code, message, statusCode, details)` and the error handler serializes it the same way. Do not add one subclass per reason.
   Where: `src/platform/errors.ts:49` (`ConflictError`), `src/platform/errors.ts:7` (`AppError`)
   **Correction (2026-10-07):** `ConflictError` now takes an optional code — `new ConflictError(msg, details?, code = 'conflict')`; the eval module throws `new ConflictError(msg, undefined, ERR.X)` instead of `AppError(code, msg, 409)`.
@@ -65,6 +71,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `test/routes-smoke.test.ts:7` (the "No-DB" claim), `test/routes-smoke.test.ts:15` (`buildApp({ config })`), `src/app.ts:43` (`createDb(config.databaseUrl)` when no `opts.db`), `src/app.ts:81` (`reapStaleRuns` on boot)
 
 ## Tool & Library Notes
+- **2026-10-11 · Fastify's querystring parser returns a string for a key sent once and an array only when the key repeats** — `?triggers=opened&triggers=synchronize` parses to `['opened','synchronize']`, but `?triggers=reopened` parses to `'reopened'`. A route whose query schema is `z.array(...)` therefore rejects every single-value request with 422, and a test that only sends two values stays green. Instead: wrap array query fields in the route with `z.preprocess(v => v === undefined || Array.isArray(v) ? v : [v], …)`, and keep the shared contract plain so both copies stay identical. Always test the one-value case.
+  Where: `server/src/modules/ci/routes.ts` (preview query, SPEC-05)
+
 - **2026-10-03 · Fastify 5: a body-less POST with no `content-type` is accepted, and a handler returning `null` under a nullable zod response schema sends the JSON body `null`** — No body schema and no `content-type` header (`content-length` absent or `0`) means the handler runs without body parsing. The client's `api.post` sends `body: undefined`, so `content-type` is never set. An async handler that returns `null` goes through `reply.send(null)` and the route serializer, and `PrBriefResponse.safeParse(null)` succeeds, so the response is `200` with body `null` (not empty, not `{}`). This is pinned by `test/brief.it.test.ts` ("GET returns the JSON literal null (200)…"). Use this pattern for "nothing yet" GETs instead of a 404.
   Where: `src/modules/brief/routes.ts` (`PrBriefResponse`), `node_modules/fastify/lib/handle-request.js:38` (body-less branch)
 

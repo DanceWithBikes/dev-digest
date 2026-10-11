@@ -46,3 +46,15 @@ describe("sidebar nav (Eval Dashboard)", () => {
     expect(item.gKey).toBe("e");
   });
 });
+
+describe("multi-agent nav entry", () => {
+  it("AC-119/120: GLOBAL entry leads to /multi-agent-review and is active under that prefix only", () => {
+    const global = NAV.find((g) => g.section === "GLOBAL")!;
+    const item = global.items.find((i) => i.label === "Multi-Agent Review")!;
+    expect(item.href).toBe("/multi-agent-review");
+    expect(activeKeyFor("/multi-agent-review")).toBe(item.key);
+    expect(activeKeyFor("/multi-agent-review/new")).toBe(item.key);
+    expect(activeKeyFor("/multi-agent-review/abc")).toBe(item.key);
+    expect(activeKeyFor("/repos/r1/multi-agent")).not.toBe(item.key);
+  });
+});

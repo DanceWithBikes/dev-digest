@@ -3,6 +3,15 @@ import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
 
+/** The workspace's agents among `ids` (unordered; unknown ids are simply absent). */
+export async function agentsByIds(db: Db, workspaceId: string, ids: string[]) {
+  if (ids.length === 0) return [];
+  return db
+    .select()
+    .from(t.agents)
+    .where(and(eq(t.agents.workspaceId, workspaceId), inArray(t.agents.id, ids)));
+}
+
 // ---- in-flight / history --------------------------------------------------
 
 /** Statuses of a run that hasn't settled yet: `queued` while it waits for the
@@ -124,7 +133,7 @@ export async function deleteAgentRun(
 export async function cancelRunIfRunning(db: Db, runId: string): Promise<boolean> {
   const rows = await db
     .update(t.agentRuns)
-    .set({ status: 'cancelled' })
+    .set({ status: 'cancelled', finishedAt: new Date() })
     .where(and(eq(t.agentRuns.id, runId), inArray(t.agentRuns.status, [...IN_FLIGHT])))
     .returning({ id: t.agentRuns.id });
   return rows.length > 0;
@@ -135,7 +144,7 @@ export async function cancelRunIfRunning(db: Db, runId: string): Promise<boolean
 export async function reapStaleRunningRuns(db: Db): Promise<number> {
   const rows = await db
     .update(t.agentRuns)
-    .set({ status: 'failed' })
+    .set({ status: 'failed', finishedAt: new Date() })
     .where(inArray(t.agentRuns.status, [...IN_FLIGHT]))
     .returning({ id: t.agentRuns.id });
   return rows.length;
@@ -175,7 +184,7 @@ export async function createAgentRun(
 export async function startAgentRun(db: Db, workspaceId: string, runId: string): Promise<boolean> {
   const rows = await db
     .update(t.agentRuns)
-    .set({ status: 'running' })
+    .set({ status: 'running', startedAt: new Date() })
     .where(
       and(
         eq(t.agentRuns.id, runId),
@@ -211,6 +220,7 @@ export async function completeAgentRun(
     .update(t.agentRuns)
     .set({
       status: values.status,
+      finishedAt: new Date(),
       durationMs: values.durationMs,
       tokensIn: values.tokensIn,
       tokensOut: values.tokensOut,
@@ -222,6 +232,49 @@ export async function completeAgentRun(
       error: values.error ?? null,
     })
     .where(eq(t.agentRuns.id, runId));
+}
+
+/**
+ * Multi-agent launch (SPEC-06): in ONE transaction insert the parent run (with
+ * the selection order in `agent_ids`) and one `queued`, `local` child run per
+ * agent, in order. Either every row exists or none does.
+ */
+export async function createMultiAgentLaunch(
+  db: Db,
+  values: {
+    workspaceId: string;
+    prId: string;
+    agents: { id: string; provider: string | null; model: string | null }[];
+  },
+): Promise<{ parentId: string; runIds: string[] }> {
+  return db.transaction(async (tx) => {
+    const [parent] = await tx
+      .insert(t.multiAgentRuns)
+      .values({
+        workspaceId: values.workspaceId,
+        prId: values.prId,
+        agentIds: values.agents.map((a) => a.id),
+      })
+      .returning({ id: t.multiAgentRuns.id });
+    const runIds: string[] = [];
+    for (const a of values.agents) {
+      const [row] = await tx
+        .insert(t.agentRuns)
+        .values({
+          workspaceId: values.workspaceId,
+          agentId: a.id,
+          prId: values.prId,
+          provider: a.provider,
+          model: a.model,
+          status: 'queued',
+          source: 'local',
+          multiAgentRunId: parent!.id,
+        })
+        .returning({ id: t.agentRuns.id });
+      runIds.push(row!.id);
+    }
+    return { parentId: parent!.id, runIds };
+  });
 }
 
 /** Persist the WHOLE run log as ONE document. PK = runId → agent_runs. */

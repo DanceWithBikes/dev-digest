@@ -16,6 +16,7 @@ export async function loadDiff(
   pull: PullRow,
   repoRow: typeof schema.repos.$inferSelect,
 ): Promise<UnifiedDiff> {
+  let gitError = 'git diff returned no files';
   try {
     const diff = await container.git.diff(
       { owner: repoRow.owner, name: repoRow.name },
@@ -23,10 +24,14 @@ export async function loadDiff(
       pull.headSha,
     );
     if (diff.files.length > 0) return diff;
-  } catch {
+  } catch (err) {
+    gitError = (err as Error).message;
     /* fall through to pr_files reconstruction */
   }
-  return diffFromPrFiles(repo, pull.id);
+  const fallback = await diffFromPrFiles(repo, pull.id);
+  // Nothing to review is a load failure, not an empty "done" review.
+  if (fallback.files.length === 0) throw new Error(`no diff available (${gitError})`);
+  return fallback;
 }
 
 /** Reconstruct a UnifiedDiff from persisted pr_files patches. */

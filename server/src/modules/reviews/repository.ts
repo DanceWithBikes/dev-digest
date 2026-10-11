@@ -151,6 +151,10 @@ export class ReviewRepository {
     return reviewRepo.setFindingDismissed(this.db, findingId, at);
   }
 
+  setFindingLearned(findingId: string, at: Date | null): Promise<FindingRow | undefined> {
+    return reviewRepo.setFindingLearned(this.db, findingId, at);
+  }
+
   // ---- intent -------------------------------------------------------------
 
   upsertIntent(prId: string, values: UpsertIntentValues): Promise<void> {
@@ -177,6 +181,20 @@ export class ReviewRepository {
     model: string | null;
   }): Promise<string> {
     return runRepo.createAgentRun(this.db, values);
+  }
+
+  /** Parent run + one queued child per agent, in one transaction. */
+  createMultiAgentLaunch(values: {
+    workspaceId: string;
+    prId: string;
+    agents: { id: string; provider: string | null; model: string | null }[];
+  }): Promise<{ parentId: string; runIds: string[] }> {
+    return runRepo.createMultiAgentLaunch(this.db, values);
+  }
+
+  /** The workspace's agents among `ids` (unordered; unknown ids absent). */
+  agentsByIds(workspaceId: string, ids: string[]) {
+    return runRepo.agentsByIds(this.db, workspaceId, ids);
   }
 
   /** queued → running; false if the run was cancelled while it waited. */

@@ -1,9 +1,9 @@
 import type { Container } from '../../platform/container.js';
 import type { FindingActionKind, PrIntentRecord, RunEventKind, RunSummary, RunTrace } from '@devdigest/shared';
-import { AppError, NotFoundError } from '../../platform/errors.js';
+import { InvalidRunRequestError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
-import { type ReviewDto, type ReviewDtoFinding } from './helpers.js';
+import { dedupeIds, isUuid, type ReviewDto, type ReviewDtoFinding } from './helpers.js';
 import { ReviewRunExecutor, type Logger } from './run-executor.js';
 import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
@@ -52,19 +52,35 @@ export class ReviewService {
   // ===========================================================================
 
   /**
-   * Resolve which agents to run. `all` → all enabled agents; else a single agent.
+   * Resolve which agents to run. `all` → all enabled agents; `agentIds` → that
+   * selection (deduped, request order); else a single agent. Mixing `agentIds`
+   * with `agentId` / `all` is rejected.
    */
   async resolveTargets(
     workspaceId: string,
-    opts: { agentId?: string; all?: boolean },
+    opts: { agentId?: string; all?: boolean; agentIds?: string[] },
   ): Promise<AgentRow[]> {
+    if (opts.agentIds !== undefined) {
+      if (opts.agentId !== undefined || opts.all) {
+        throw new InvalidRunRequestError('agentIds cannot be combined with agentId or all');
+      }
+      // Resolve every id in ONE query before anything is created (all-or-nothing).
+      const ids = dedupeIds(opts.agentIds);
+      const rows = await this.repo.agentsByIds(workspaceId, ids.filter(isUuid));
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      return ids.map((id) => {
+        const agent = byId.get(id);
+        if (!agent) throw new NotFoundError('Agent not found');
+        return agent;
+      });
+    }
     if (opts.all) return this.agents.listEnabled(workspaceId);
     if (opts.agentId) {
       const agent = await this.agents.getById(workspaceId, opts.agentId);
       if (!agent) throw new NotFoundError('Agent not found');
       return [agent];
     }
-    throw new AppError('invalid_run_request', 'Provide agentId or all:true', 400);
+    throw new InvalidRunRequestError('Provide agentId or all:true');
   }
 
   /** Delete a whole review run (one agent's pass) + its findings (cascade). */
@@ -116,7 +132,12 @@ export class ReviewService {
     prId: string,
     targets: AgentRow[],
     logger?: Logger,
-  ): Promise<{ runs: { run_id: string; agent_id: string; agent_name: string }[]; reviews: ReviewDto[] }> {
+    opts: { multiAgent?: boolean } = {},
+  ): Promise<{
+    runs: { run_id: string; agent_id: string; agent_name: string }[];
+    reviews: ReviewDto[];
+    multiAgentRunId: string | null;
+  }> {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
     const repo = await this.repo.getRepo(pull.repoId);
@@ -127,16 +148,32 @@ export class ReviewService {
     // stream. The actual (slow) review runs in the background below.
     const runs: { run_id: string; agent_id: string; agent_name: string }[] = [];
     const jobs: { agent: AgentRow; runId: string }[] = [];
-    for (const agent of targets) {
-      const runId = await this.repo.createAgentRun({
+    let multiAgentRunId: string | null = null;
+    if (opts.multiAgent) {
+      const launch = await this.repo.createMultiAgentLaunch({
         workspaceId,
-        agentId: agent.id,
         prId,
-        provider: agent.provider,
-        model: agent.model,
+        agents: targets.map((a) => ({ id: a.id, provider: a.provider, model: a.model })),
       });
-      runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
-      jobs.push({ agent, runId });
+      multiAgentRunId = launch.parentId;
+      targets.forEach((agent, i) => {
+        const runId = launch.runIds[i]!;
+        runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
+        jobs.push({ agent, runId });
+      });
+      logger?.info({ parentId: launch.parentId, prId, agentCount: targets.length }, 'review: multi-agent launch created');
+    } else {
+      for (const agent of targets) {
+        const runId = await this.repo.createAgentRun({
+          workspaceId,
+          agentId: agent.id,
+          prId,
+          provider: agent.provider,
+          model: agent.model,
+        });
+        runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
+        jobs.push({ agent, runId });
+      }
     }
 
     // Fire-and-forget: the HTTP response returns now with the runIds; reviews
@@ -145,7 +182,7 @@ export class ReviewService {
       logger?.error({ prId, err: (err as Error).message }, 'review: background execution crashed');
     });
 
-    return { runs, reviews: [] };
+    return { runs, reviews: [], multiAgentRunId };
   }
 
   private publish(runId: string, kind: RunEventKind, msg: string, data?: unknown) {

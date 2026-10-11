@@ -38,6 +38,15 @@ export const NAV: NavGroup[] = [
       { key: "skills", label: "Skills", icon: "Sparkles", href: "/skills", gKey: "s" },
       { key: "conventions", label: "Conventions", icon: "ListChecks", href: "/repos/:repoId/conventions", gKey: "c" },
       { key: "eval", label: "Eval Dashboard", icon: "FlaskConical", href: "/eval", gKey: "e" },
+      { key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" },
+    ],
+  },
+  /* Cross-repo screens. Section header and label are literals like every other
+     entry here (the nav is not routed through next-intl). */
+  {
+    section: "GLOBAL",
+    items: [
+      { key: "multi-agent", label: "Multi-Agent Review", icon: "Layers", href: "/multi-agent-review" },
     ],
   },
 ];

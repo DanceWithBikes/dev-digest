@@ -19,6 +19,12 @@ import type {
   IssueMeta,
   CommitRef,
   CommitPullRef,
+  RepoInfo,
+  CommitComparison,
+  WorkflowRunMeta,
+  RunArtifactMeta,
+  ListWorkflowRunsOptions,
+  PullState,
   GitClient,
   CloneOptions,
   UnifiedDiff,
@@ -131,6 +137,18 @@ export interface MockGitHubOptions {
   commitsByPath?: Record<string, CommitRef[]>;
   /** `listPullsForCommit` fixture, keyed by sha. Defaults to `[]` for any sha. */
   pullsByCommit?: Record<string, CommitPullRef[]>;
+  /** `getRepository` fixture (defaults to id 4242 + the requested full name). */
+  repository?: { id: number };
+  /** `listWorkflowRuns` fixture. */
+  workflowRuns?: WorkflowRunMeta[];
+  /** `listRunArtifacts` fixture, keyed by workflow run id. */
+  artifacts?: Record<number, RunArtifactMeta[]>;
+  /** `downloadArtifact` fixture (zip bytes), keyed by artifact id. */
+  artifactZips?: Record<number, Uint8Array>;
+  /** `getPullState` fixture, keyed by PR number. Defaults to `'open'`. */
+  pullStates?: Record<number, PullState>;
+  /** Blob paths already present on a ref before any `commitFiles` (keyed by ref). */
+  treePaths?: Record<string, string[]>;
 }
 
 export class MockGitHubClient implements GitHubClient {
@@ -242,6 +260,59 @@ export class MockGitHubClient implements GitHubClient {
   async findOpenPr(_repo: RepoRef, branch: string): Promise<{ url: string } | null> {
     const pr = this.openedPrs.find((p) => p.head === branch);
     return pr ? { url: 'https://github.com/mock/mock/pull/1' } : null;
+  }
+
+  async getRepository(repo: RepoRef): Promise<RepoInfo> {
+    return { id: this.opts.repository?.id ?? 4242, full_name: `${repo.owner}/${repo.name}` };
+  }
+
+  /** Commits recorded on `branch` — the single source for compare + tree reads. */
+  private commitsOn(branch: string): CommitFilesPayload[] {
+    return this.committed.filter((c) => c.branch === branch);
+  }
+
+  async compareCommits(
+    _repo: RepoRef,
+    _base: string,
+    head: string,
+  ): Promise<CommitComparison | null> {
+    const commits = this.commitsOn(head);
+    if (commits.length === 0) return null;
+    return {
+      ahead_by: commits.length,
+      commits: commits.map((c, i) => ({ sha: `mock-commit-${i + 1}`, message: c.message })),
+    };
+  }
+
+  async listWorkflowRuns(
+    _repo: RepoRef,
+    _workflowFile: string,
+    _opts: ListWorkflowRunsOptions,
+  ): Promise<WorkflowRunMeta[]> {
+    return this.opts.workflowRuns ?? [];
+  }
+
+  async listRunArtifacts(_repo: RepoRef, runId: number): Promise<RunArtifactMeta[]> {
+    return this.opts.artifacts?.[runId] ?? [];
+  }
+
+  async downloadArtifact(_repo: RepoRef, artifactId: number): Promise<Uint8Array> {
+    const zip = this.opts.artifactZips?.[artifactId];
+    if (!zip) throw new Error(`mock: no artifact zip ${artifactId}`);
+    return zip;
+  }
+
+  async getPullState(_repo: RepoRef, n: number): Promise<PullState> {
+    return this.opts.pullStates?.[n] ?? 'open';
+  }
+
+  async listTreePaths(_repo: RepoRef, ref: string, prefixes: string[]): Promise<string[]> {
+    const paths = new Set(this.opts.treePaths?.[ref] ?? []);
+    for (const c of this.commitsOn(ref)) {
+      for (const f of c.files) paths.add(f.path);
+      for (const d of c.deletePaths ?? []) paths.delete(d);
+    }
+    return [...paths].filter((p) => prefixes.some((x) => p.startsWith(x)));
   }
 
   async getIssue(_repo: RepoRef, n: number): Promise<IssueMeta> {
@@ -367,5 +438,19 @@ export class MockSecretsProvider implements SecretsProvider {
   constructor(private secrets: Partial<Record<string, string>> = {}) {}
   async get(key: SecretKey): Promise<string | undefined> {
     return this.secrets[key as string];
+  }
+}
+
+/** In-memory runner bundle for tests; `contents: null` = "not built" (AC-14). */
+export class MockRunnerBundleSource {
+  constructor(private contents: string | null = '// mock runner bundle\n') {}
+
+  async read(): Promise<{ contents: string; bytes: number; version: string } | null> {
+    if (this.contents === null) return null;
+    return {
+      contents: this.contents,
+      bytes: Buffer.byteLength(this.contents),
+      version: 'mockrunner01',
+    };
   }
 }

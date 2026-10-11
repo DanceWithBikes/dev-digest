@@ -104,3 +104,4 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `10-onboarding-tour` | sidebar → Onboarding Tour for the seeded repo → empty state; Generate → `no_data` banner, no model call |
 | `11-pr-brief` | PR #482 → Overview → seeded PR Brief renders (summary, Risk areas, Review focus), no Generate button; first Review focus item → Files changed with `file=` in the URL and the file expanded |
 | `12-pr-brief-empty` | PR #483 (no stored brief) → Overview → PR Brief section with a Generate brief button (never clicked) |
+| `15-multi-agent-review` | `/multi-agent-review` → open the seeded 2-agent parent run on PR #484 → Columns shows 2 columns, Tabs shows 2 agent tabs, "Where agents disagree" shows at least 1 conflict row; no run launched, no model call |

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull } from 'drizzle-orm';
 import { scoreCase, scoreBatch } from '@devdigest/reviewer-core';
 import {
   GENERAL_REVIEWER_PROMPT,
@@ -306,6 +306,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
 
   await seedSkills(db, workspaceId);
   await seedFixturePrs(db, workspaceId, repoId);
+  await seedMultiAgentRun(db, workspaceId, repoId);
   await seedEvalCases(db, workspaceId, securityAgent!);
 
   return { workspaceId, userId };
@@ -464,6 +465,155 @@ async function seedFixturePrs(db: Db, workspaceId: string, repoId: string): Prom
       message: fx.commitMessage,
       author: fx.author,
     });
+  }
+}
+
+/**
+ * SPEC-06 AC-125 — one finished 2-agent parent run on PR #484 (API Contract +
+ * Security reviewers) with a group both agree on and one only API Contract
+ * flagged (a conflict). Idempotent by key: skipped when #484 already has a
+ * `seed` child run attached to a parent; never updated.
+ */
+async function seedMultiAgentRun(db: Db, workspaceId: string, repoId: string): Promise<void> {
+  const [pr] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 484)));
+  if (!pr) return;
+
+  const [existing] = await db
+    .select({ id: t.agentRuns.id })
+    .from(t.agentRuns)
+    .where(
+      and(
+        eq(t.agentRuns.prId, pr.id),
+        eq(t.agentRuns.model, 'seed'),
+        isNotNull(t.agentRuns.multiAgentRunId),
+      ),
+    );
+  if (existing) return;
+
+  const agentRows = await db.select().from(t.agents).where(eq(t.agents.workspaceId, workspaceId));
+  const contract = agentRows.find((a) => a.name === 'API Contract Reviewer');
+  const security = agentRows.find((a) => a.name === 'Security Reviewer');
+  if (!contract || !security) return;
+
+  const [parent] = await db
+    .insert(t.multiAgentRuns)
+    .values({
+      workspaceId,
+      prId: pr.id,
+      ranAt: new Date('2026-05-12T09:30:00Z'),
+      agentIds: [contract.id, security.id],
+    })
+    .returning();
+
+  const SOURCE = 'src/api/payments.ts';
+  const plans = [
+    {
+      agent: contract,
+      startedAt: new Date('2026-05-12T09:30:01Z'),
+      durationMs: 8400,
+      costUsd: 0.012,
+      score: 64,
+      verdict: 'request_changes',
+      summary: 'Two breaking changes to the public /v1/payments contract.',
+      findings: [
+        {
+          severity: 'WARNING',
+          category: 'bug',
+          title: 'Breaking rename of customer_id query param',
+          startLine: 14,
+          endLine: 14,
+          rationale:
+            'Clients sending `customer_id` now fail validation. Accept both names for one release or version the route.',
+          confidence: 0.86,
+        },
+        {
+          severity: 'WARNING',
+          category: 'bug',
+          title: 'Response field legacy_reference removed',
+          startLine: 26,
+          endLine: 26,
+          rationale:
+            'Existing consumers read `legacy_reference`; removing it is a breaking response change.',
+          confidence: 0.8,
+        },
+      ],
+    },
+    {
+      agent: security,
+      startedAt: new Date('2026-05-12T09:30:02Z'),
+      durationMs: 11200,
+      costUsd: 0.018,
+      score: 72,
+      verdict: 'comment',
+      summary: 'No security defects; one compatibility concern on the query parameter.',
+      findings: [
+        {
+          severity: 'WARNING',
+          category: 'bug',
+          title: 'Breaking rename of the customer_id query param',
+          startLine: 13,
+          endLine: 14,
+          rationale:
+            'Callers still passing `customer_id` are rejected, which can surface as failed payment lookups.',
+          confidence: 0.78,
+        },
+      ],
+    },
+  ];
+
+  for (const p of plans) {
+    const finishedAt = new Date(p.startedAt.getTime() + p.durationMs);
+    const [run] = await db
+      .insert(t.agentRuns)
+      .values({
+        workspaceId,
+        agentId: p.agent.id,
+        prId: pr.id,
+        ranAt: p.startedAt,
+        provider: p.agent.provider,
+        model: 'seed',
+        durationMs: p.durationMs,
+        costUsd: p.costUsd,
+        status: 'done',
+        source: 'local',
+        findingsCount: p.findings.length,
+        grounding: `${p.findings.length}/${p.findings.length} grounded`,
+        score: p.score,
+        multiAgentRunId: parent!.id,
+        startedAt: p.startedAt,
+        finishedAt,
+      })
+      .returning();
+    const [review] = await db
+      .insert(t.reviews)
+      .values({
+        workspaceId,
+        prId: pr.id,
+        agentId: p.agent.id,
+        runId: run!.id,
+        kind: 'review',
+        verdict: p.verdict,
+        summary: p.summary,
+        score: p.score,
+        model: 'seed',
+      })
+      .returning();
+    await db.insert(t.findings).values(
+      p.findings.map((f) => ({
+        reviewId: review!.id,
+        file: SOURCE,
+        startLine: f.startLine,
+        endLine: f.endLine,
+        severity: f.severity,
+        category: f.category,
+        title: f.title,
+        rationale: f.rationale,
+        confidence: f.confidence,
+      })),
+    );
   }
 }
 

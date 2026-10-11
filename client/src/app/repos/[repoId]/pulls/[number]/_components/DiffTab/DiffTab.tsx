@@ -8,7 +8,7 @@ import { usePrComments, useCreatePrComment, usePrReviews, useFindingAction } fro
 import { useSmartDiff, useGenerateSummaries } from "@/lib/hooks/core";
 import { notify } from "@/lib/toast";
 import type { FindingRecord, PrFile } from "@devdigest/shared";
-import { FindingCard } from "../FindingCard";
+import { FindingCard } from "@/components/finding-card";
 import { DiffGroup } from "./_components/DiffGroup";
 import { roleLabelKey, toPrFiles } from "./helpers";
 import { s } from "./styles";

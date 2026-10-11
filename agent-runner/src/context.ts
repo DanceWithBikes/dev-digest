@@ -15,6 +15,11 @@ import { RunnerError } from './errors.js';
 export interface CiEnv {
   GITHUB_REPOSITORY?: string;
   PR_NUMBER?: string;
+  GITHUB_REPOSITORY_ID?: string;
+  GITHUB_RUN_ID?: string;
+  GITHUB_RUN_ATTEMPT?: string;
+  /** Installation id the generated workflow passes through (AC-120). */
+  DEVDIGEST_INSTALLATION_ID?: string;
   GITHUB_EVENT_PATH?: string;
   [key: string]: string | undefined;
 }
@@ -30,6 +35,13 @@ export interface PrContext {
   /** True when the PR head is a fork — informational only; the workflow
    *  itself is responsible for never scheduling this job for fork PRs. */
   isFork: boolean;
+  /** Identity fields for the artifact; `undefined` when the workflow does not set them. */
+  repositoryId?: number;
+  /** PR head commit (`pull_request.head.sha`), NOT `GITHUB_SHA` (the merge commit). */
+  headSha?: string;
+  runId?: number;
+  runAttempt?: number;
+  installationId?: string;
 }
 
 interface PullRequestEventPayload {
@@ -37,7 +49,7 @@ interface PullRequestEventPayload {
     number?: number;
     title?: string;
     body?: string | null;
-    head?: { repo?: { fork?: boolean } | null };
+    head?: { sha?: string; repo?: { fork?: boolean } | null };
   };
 }
 
@@ -57,6 +69,12 @@ function readEventPayload(
   } catch {
     return null;
   }
+}
+
+function positiveInt(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
 /** Resolve the PR context from env + (best-effort) event payload. */
@@ -90,5 +108,10 @@ export function resolvePrContext(
     title: pr?.title ?? '',
     body: pr?.body ?? '',
     isFork: pr?.head?.repo?.fork ?? false,
+    repositoryId: positiveInt(env.GITHUB_REPOSITORY_ID),
+    headSha: typeof pr?.head?.sha === 'string' && pr.head.sha ? pr.head.sha : undefined,
+    runId: positiveInt(env.GITHUB_RUN_ID),
+    runAttempt: positiveInt(env.GITHUB_RUN_ATTEMPT),
+    installationId: env.DEVDIGEST_INSTALLATION_ID || undefined,
   };
 }

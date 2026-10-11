@@ -33,6 +33,12 @@ const EnvSchema = z.object({
   // Where the evals package appends its per-case records; read by the skills
   // module's "Sync results". Default: <repo root>/evals/results/records.jsonl.
   EVAL_RECORDS_PATH: z.string().optional(),
+  // Prebuilt agent-runner bundle shipped by Export to CI. Default:
+  // <repo root>/agent-runner/dist/index.js (built with `cd agent-runner && pnpm build`).
+  DEVDIGEST_RUNNER_BUNDLE_PATH: z.string().optional(),
+  // Test-only: serve the CI module's GitHub calls from the in-memory mock
+  // (hermetic e2e). Forced off in production. Other modules are unaffected.
+  DEVDIGEST_CI_GITHUB_MOCK: z.string().optional(),
   // Global per-IP request cap per minute (@fastify/rate-limit). The hermetic e2e
   // suite raises it; see scripts/e2e.sh.
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
@@ -53,6 +59,10 @@ export type AppConfig = {
   cloneDir: string;
   /** Absolute path to the evals package's `records.jsonl` (`EVAL_RECORDS_PATH`). */
   evalRecordsPath: string;
+  /** Absolute path to the prebuilt agent-runner bundle (`DEVDIGEST_RUNNER_BUNDLE_PATH`). */
+  runnerBundlePath: string;
+  /** Serve the ci module's GitHub calls from the mock (`DEVDIGEST_CI_GITHUB_MOCK`); never in production. */
+  ciGithubMock: boolean;
   /** Absolute path to the writable secrets store (BYO keys from the UI). */
   secretsPath: string;
   nodeEnv: 'development' | 'test' | 'production';
@@ -82,12 +92,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     parsed.EVAL_RECORDS_PATH ??
       fileURLToPath(new URL('../../../evals/results/records.jsonl', import.meta.url)),
   );
+  const runnerBundlePath = resolve(
+    process.cwd(),
+    parsed.DEVDIGEST_RUNNER_BUNDLE_PATH ??
+      fileURLToPath(new URL('../../../agent-runner/dist/index.js', import.meta.url)),
+  );
   return {
     databaseUrl: parsed.DATABASE_URL,
     apiPort: parsed.API_PORT,
     webPort: parsed.WEB_PORT,
     cloneDir,
     evalRecordsPath: evalRecordsPathRaw,
+    runnerBundlePath,
+    ciGithubMock: parsed.NODE_ENV !== 'production' && parsed.DEVDIGEST_CI_GITHUB_MOCK === 'true',
     secretsPath: join(homedir(), '.devdigest', 'secrets.json'),
     nodeEnv: parsed.NODE_ENV,
     logLevel: parsed.LOG_LEVEL ?? (parsed.NODE_ENV === 'test' ? 'silent' : 'info'),

@@ -16,6 +16,7 @@ export const FindingRecord = Finding.extend({
   review_id: z.string(),
   accepted_at: z.string().nullable(),
   dismissed_at: z.string().nullable(),
+  learned_at: z.string().nullable(),
 });
 export type FindingRecord = z.infer<typeof FindingRecord>;
 
@@ -52,6 +53,8 @@ export type ReviewRunTarget = z.infer<typeof ReviewRunTarget>;
 export const ReviewRunResponse = z.object({
   pr_id: z.string(),
   runs: z.array(ReviewRunTarget),
+  /** The parent run id when the request used `agentIds`; null otherwise. */
+  multi_agent_run_id: z.string().nullable(),
   reviews: z.array(ReviewRecord),
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;

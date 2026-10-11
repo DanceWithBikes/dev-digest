@@ -4,29 +4,51 @@
     "emptyBody": "Once you export an agent to CI, every automated review shows up here.",
     "title": "CI Runs",
     "subtitle": "Agent reviews executed inside CI · not local runs",
-    "autoRefresh": "auto-refresh on",
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
+    "loading": "Loading CI runs…",
+    "loadFailed": "Couldn’t load CI runs",
+    "warningTitle": "Some repositories could not be refreshed",
+    "warning": "{repo}: {message}",
     "filters": {
+      "window": "Time range",
+      "agent": "Agent",
+      "repo": "Repository",
+      "status": "Status",
       "last7Days": "Last 7 days",
+      "allTime": "All time",
       "allAgents": "All agents",
       "allRepos": "All repos",
       "allStatuses": "All statuses"
     },
     "table": {
-      "timestamp": "Timestamp",
+      "repository": "Repository",
       "pullRequest": "Pull request",
-      "source": "Source",
+      "agent": "Agent",
+      "verdict": "Verdict",
       "findings": "Findings",
       "cost": "Cost",
-      "status": "Status"
+      "duration": "Duration",
+      "job": "Job"
     },
     "view": "View",
+    "noValue": "—",
+    "blockers": "{count} blockers",
+    "pager": {
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {page}"
+    },
     "status": {
       "succeeded": "Succeeded",
-      "noFindings": "No findings",
+      "no_findings": "No findings",
       "failed": "Failed",
       "running": "Running"
+    },
+    "verdict": {
+      "approve": "Approve",
+      "comment": "Comment",
+      "request_changes": "Request changes"
     }
   },
   "exportWizard": {
@@ -35,6 +57,7 @@
     "thisAgent": "this agent",
     "back": "Back",
     "continue": "Continue",
+    "close": "Close",
     "install": "Install",
     "installing": "Installing…",
     "steps": {
@@ -45,22 +68,27 @@
     },
     "targets": {
       "gha": "GitHub Actions",
-      "circle": "CircleCI",
-      "jenkins": "Jenkins",
-      "cli": "Generic CLI",
-      "ghaDesc": "Runs on pull_request events",
-      "circleDesc": "config.yml job",
-      "jenkinsDesc": "Pipeline stage",
-      "cliDesc": "devdigest review --pr"
+      "ghaDesc": "Runs on pull_request events"
     },
     "recommended": "recommended",
     "repoLabel": "Target repository",
-    "repoHint": "owner/name — the repo to add the workflow to",
-    "repoPlaceholder": "acme/payments-api",
+    "repoHint": "Only repositories imported into this workspace are listed.",
+    "noRepos": "No repositories imported yet.",
     "filesToCreate": "FILES TO CREATE",
     "generating": "Generating…",
+    "previewFailed": "Couldn’t generate the files",
     "editable": "editable",
+    "fileContents": "Contents of {path}",
     "triggerLabel": "Trigger",
+    "triggerNone": "Turn on at least one trigger.",
+    "triggers": {
+      "opened": "pull_request:opened",
+      "synchronize": "pull_request:synchronize",
+      "reopened": "pull_request:reopened"
+    },
+    "secretsLabel": "Secrets",
+    "secretInstruction": "Add it under Settings → Secrets and variables → Actions in the target repository.",
+    "githubTokenAuto": "Auto-provided by Actions",
     "postResultsLabel": "Post results as",
     "postAs": {
       "githubReview": "GitHub review",
@@ -68,37 +96,40 @@
       "none": "None (exit code only)"
     },
     "blockMergeTitle": "Block merge on findings",
-    "blockMergeDesc": "Requires a GitHub App — not available with PAT in local mode",
+    "blockMergeInfo": "To block merges, set “Fail CI on” in the agent’s CI tab so the run exits non-zero, then add a required status check in the repository’s GitHub branch protection. No GitHub App is needed.",
     "installCardTitle": "Open a PR with these files",
-    "installCardBody": "DevDigest opens a PR in {repo} titled “Add DevDigest CI review” with the {count} generated files.",
-    "ownerRepo": "owner/repo",
-    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs."
+    "installCardBody": "DevDigest opens a PR in {repo} on the devdigest/ci branch with the {count} generated files.",
+    "installZip": "Copy files as a zip",
+    "installZipBody": "Download the files and add them to {repo} yourself.",
+    "prLink": "View pull request",
+    "prOpened": "Pull request opened",
+    "zipDownloaded": "The zip was downloaded.",
+    "installFailed": "Install failed"
   },
   "ciTab": {
-    "heading": "Continuous Integration",
+    "heading": "CI deployment",
     "subtitle": "Run this agent automatically on pull requests in a target repo.",
-    "exportToCi": "Export to CI",
-    "publish": "Publish to CI",
-    "update": "Update CI",
-    "noRepo": "Connect a repository first",
-    "empty": "Not deployed to CI yet. Use “Publish to CI” to open a PR that adds the workflow + agent config.",
-    "installed": "installed {date}"
-  },
-  "publishDialog": {
-    "title": "Publish to CI",
-    "subtitle": "Run {agentName} on every pull request in {repo}",
-    "intro": "Opens a pull request in {repo} adding a GitHub Actions workflow + this agent's config under .devdigest/. On every PR the agent reviews the diff.",
-    "filesLabel": "FILES",
-    "generating": "Generating…",
-    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs. GITHUB_TOKEN is provided automatically.",
-    "cancel": "Cancel",
-    "publish": "Publish",
-    "publishing": "Publishing…",
-    "republish": "Re-publish (update)",
-    "doneTitle": "Published",
-    "doneBody": "Opened/updated a pull request in {repo} with the workflow + agent config.",
-    "openPr": "View pull request",
-    "close": "Close"
+    "activeIn": "Active in {count} repos",
+    "githubActions": "GitHub Actions",
+    "noRunsYet": "no runs yet",
+    "version": "agent v{agent} · runner {runner}",
+    "behind": "behind",
+    "state": {
+      "pr_open": "PR open",
+      "active": "Active",
+      "pr_closed": "PR closed"
+    },
+    "latestRun": "{status} · {when}",
+    "empty": "Not deployed to CI yet. Use “+ Add to CI” to open a PR that adds the workflow and agent config.",
+    "loading": "Loading installations…",
+    "loadFailed": "Couldn’t load CI installations",
+    "failOn": "Fail CI on",
+    "failOnNote": "A change reaches a repo only after “Update CI config” and the merge of that PR.",
+    "failOnSaved": "Saved",
+    "addToCi": "+ Add to CI",
+    "updateCiConfig": "Update CI config",
+    "addRepository": "+ Add repository",
+    "history": "CI run history"
   },
   "page": {
     "crumb": "CI Runs"

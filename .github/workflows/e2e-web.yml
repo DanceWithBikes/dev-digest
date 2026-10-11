@@ -94,6 +94,10 @@ jobs:
         working-directory: server
         env:
           DEVDIGEST_CI_GITHUB_MOCK: 'true'
+          # The suite's PR-page polling exceeds the default 120 req/min global
+          # limit by flow 13 (429s, see e2e/docs/insights.md); scripts/e2e.sh
+          # sets the same value for the hermetic run.
+          RATE_LIMIT_MAX: '2000'
         run: |
           # tsx directly (not `pnpm start`): the committed package.json's start
           # is `node dist/server.js`, which would need a build first. tsx runs

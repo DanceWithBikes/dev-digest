@@ -13,7 +13,14 @@ import type {
   IssueMeta,
   CommitRef,
   CommitPullRef,
+  RepoInfo,
+  CommitComparison,
+  WorkflowRunMeta,
+  RunArtifactMeta,
+  ListWorkflowRunsOptions,
+  PullState,
 } from '@devdigest/shared';
+import { ExternalServiceError } from '../../platform/errors.js';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
 const TIMEOUT = 30_000;
@@ -333,12 +340,20 @@ export class OctokitGitHubClient implements GitHubClient {
             owner,
             repo: name,
             base_tree: parentCommit.data.tree.sha,
-            tree: payload.files.map((f) => ({
-              path: f.path,
-              mode: '100644',
-              type: 'blob',
-              content: f.contents,
-            })),
+            tree: [
+              ...payload.files.map((f) => ({
+                path: f.path,
+                mode: '100644' as const,
+                type: 'blob' as const,
+                content: f.contents,
+              })),
+              ...(payload.deletePaths ?? []).map((path) => ({
+                path,
+                mode: '100644' as const,
+                type: 'blob' as const,
+                sha: null,
+              })),
+            ],
           });
 
           const commit = await g.createCommit({
@@ -385,6 +400,152 @@ export class OctokitGitHubClient implements GitHubClient {
           });
           const pr = res.data[0];
           return pr ? { url: pr.html_url } : null;
+        })(),
+        TIMEOUT,
+      ),
+    );
+  }
+
+  async getRepository(repo: RepoRef): Promise<RepoInfo> {
+    const res = await withRetry(() =>
+      withTimeout(this.octokit.rest.repos.get({ owner: repo.owner, repo: repo.name }), TIMEOUT),
+    );
+    return { id: res.data.id, full_name: res.data.full_name };
+  }
+
+  async compareCommits(
+    repo: RepoRef,
+    base: string,
+    head: string,
+  ): Promise<CommitComparison | null> {
+    try {
+      const res = await withRetry(() =>
+        withTimeout(
+          this.octokit.rest.repos.compareCommitsWithBasehead({
+            owner: repo.owner,
+            repo: repo.name,
+            basehead: `${base}...${head}`,
+          }),
+          TIMEOUT,
+        ),
+      );
+      return {
+        ahead_by: res.data.ahead_by,
+        commits: res.data.commits.map((c) => ({ sha: c.sha, message: c.commit.message })),
+      };
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) return null;
+      throw err;
+    }
+  }
+
+  async listWorkflowRuns(
+    repo: RepoRef,
+    workflowFile: string,
+    opts: ListWorkflowRunsOptions,
+  ): Promise<WorkflowRunMeta[]> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.actions.listWorkflowRuns({
+          owner: repo.owner,
+          repo: repo.name,
+          workflow_id: workflowFile,
+          status: opts.status,
+          per_page: opts.perPage,
+        }),
+        TIMEOUT,
+      ),
+    );
+    return res.data.workflow_runs.map((r) => ({
+      id: r.id,
+      run_attempt: r.run_attempt ?? 1,
+      head_sha: r.head_sha,
+      head_branch: r.head_branch,
+      conclusion: r.conclusion,
+      html_url: r.html_url,
+      repository: { id: r.repository.id, full_name: r.repository.full_name },
+      pull_numbers: (r.pull_requests ?? []).map((p) => p.number),
+      updated_at: r.updated_at,
+    }));
+  }
+
+  async listRunArtifacts(repo: RepoRef, runId: number): Promise<RunArtifactMeta[]> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.actions.listWorkflowRunArtifacts({
+          owner: repo.owner,
+          repo: repo.name,
+          run_id: runId,
+        }),
+        TIMEOUT,
+      ),
+    );
+    return res.data.artifacts.map((a) => ({
+      id: a.id,
+      name: a.name,
+      size_in_bytes: a.size_in_bytes,
+      expired: a.expired,
+    }));
+  }
+
+  async downloadArtifact(repo: RepoRef, artifactId: number): Promise<Uint8Array> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.actions.downloadArtifact({
+          owner: repo.owner,
+          repo: repo.name,
+          artifact_id: artifactId,
+          archive_format: 'zip',
+        }),
+        TIMEOUT,
+      ),
+    );
+    return new Uint8Array(res.data as ArrayBuffer);
+  }
+
+  async getPullState(repo: RepoRef, n: number): Promise<PullState> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.pulls.get({ owner: repo.owner, repo: repo.name, pull_number: n }),
+        TIMEOUT,
+      ),
+    );
+    if (res.data.merged) return 'merged';
+    return res.data.state === 'closed' ? 'closed' : 'open';
+  }
+
+  async listTreePaths(repo: RepoRef, ref: string, prefixes: string[]): Promise<string[]> {
+    return withRetry(() =>
+      withTimeout(
+        (async () => {
+          const g = this.octokit.rest.git;
+          let sha: string;
+          try {
+            const r = await g.getRef({ owner: repo.owner, repo: repo.name, ref: `heads/${ref}` });
+            sha = r.data.object.sha;
+          } catch (err) {
+            if ((err as { status?: number }).status === 404) return [];
+            throw err;
+          }
+          const commit = await g.getCommit({ owner: repo.owner, repo: repo.name, commit_sha: sha });
+          const tree = await g.getTree({
+            owner: repo.owner,
+            repo: repo.name,
+            tree_sha: commit.data.tree.sha,
+            recursive: 'true',
+          });
+          if (tree.data.truncated) {
+            // A truncated tree would hide stale manifests; fail the install loudly instead.
+            throw new ExternalServiceError(
+              `The file tree of ${repo.owner}/${repo.name} is too large to list completely`,
+            );
+          }
+          return tree.data.tree
+            .filter(
+              (e) =>
+                e.type === 'blob' && !!e.path && prefixes.some((p) => e.path!.startsWith(p)),
+            )
+            .map((e) => e.path as string);
         })(),
         TIMEOUT,
       ),

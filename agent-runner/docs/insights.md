@@ -14,6 +14,12 @@ Non-obvious discoveries from real sessions. Specific and actionable — pass the
 
 ## Codebase Patterns
 
+2026-10-11 — **`dist/index.js` is an ES module and is not the only build output.** `ncc build` (0.38.4) also writes `dist/package.json` = `{"type":"module"}` and a lazy chunk `dist/300.index.js` (`fileFromPath` from `node-fetch`/`formdata-polyfill`, pulled in by `openai`, loaded only through `__nccwpck_require__.e(300)` for file uploads, which the runner never does). Copying `index.js` alone into a repo whose root `package.json` says `"type": "commonjs"` breaks `node index.js`. So the CI export ships a generated `.devdigest/runner/package.json` with `{"type":"module"}` next to `index.js` (SPEC-05 AC-8). The chunk is not shipped: verified 2026-10-11 by running `index.js` + the generated `package.json` alone, in a dir whose root `package.json` is `"type":"commonjs"`, which reached the expected "manifest directory not found" error with no missing-chunk failure. The "single dist/index.js" wording in the What Works entry above is only true for what runs.
+Where: `agent-runner/package.json:5` (`"type": "module"`), `agent-runner/package.json:9` (`build`)
+
+2026-10-11 — **`GITHUB_SHA` on a `pull_request` run is the merge commit, not the PR head.** The artifact's `head_sha` must come from `pull_request.head.sha` in the `GITHUB_EVENT_PATH` payload, or ingest's head-SHA verification (SPEC-05 AC-51) never matches GitHub's run metadata.
+Where: `agent-runner/src/context.ts` (`headSha`)
+
 2026-07-08 — `agent-runner/tsconfig.json` intentionally mirrors `server/tsconfig.json`'s compiler options and path-alias block verbatim (aliasing `@devdigest/reviewer-core` → `../reviewer-core/src/index.ts` and `@devdigest/shared` → `../server/src/vendor/shared/index.ts`), so both consumers resolve the exact same source files. `agent-runner/vitest.config.ts` re-declares the same two aliases (vitest/vite doesn't read `tsconfig.json` paths automatically) — matches the pattern already used in `reviewer-core/vitest.config.ts`. ref: agent-runner/tsconfig.json:21
 
 ## Tool & Library Notes

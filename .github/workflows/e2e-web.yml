@@ -15,12 +15,14 @@ on:
       - 'client/**'
       - 'server/**'
       - 'e2e/**'
+      - 'agent-runner/**'
       - '.github/workflows/e2e-web.yml'
   pull_request:
     paths:
       - 'client/**'
       - 'server/**'
       - 'e2e/**'
+      - 'agent-runner/**'
       - '.github/workflows/e2e-web.yml'
 
 permissions:
@@ -79,8 +81,18 @@ jobs:
         working-directory: reviewer-core
         run: npm ci
 
+      # The ci module serves the runner bundle from agent-runner/dist/index.js,
+      # which is gitignored, so build it (needs reviewer-core's deps above).
+      - name: Build agent-runner bundle
+        working-directory: agent-runner
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: Start API (:3001)
         working-directory: server
+        env:
+          DEVDIGEST_CI_GITHUB_MOCK: 'true'
         run: |
           # tsx directly (not `pnpm start`): the committed package.json's start
           # is `node dist/server.js`, which would need a build first. tsx runs

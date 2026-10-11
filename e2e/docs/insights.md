@@ -11,6 +11,10 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
 
 ## Codebase Patterns
 
+- **2026-10-11 · Two worktrees running `e2e:hermetic` at once collide on the default container name and ports** — `scripts/e2e.sh` defaults to the container `devdigest-e2e-postgres` and ports 5433/3101/3100. It runs `docker rm -f` on that container first, so a second worktree's run kills the first one's database mid-flow. When another worktree may be running the suite, override all four: `E2E_PG_CONTAINER=devdigest-e2e-<branch> E2E_PG_PORT=5441 E2E_API_PORT=3211 E2E_WEB_PORT=3210 npm run e2e:hermetic`.
+  Where: `scripts/e2e.sh:26` (`PG_CONTAINER`), `scripts/e2e.sh:89` (`docker rm -f`)
+
+
 - **2026-10-03 · A manual smoke `POST /repos/:id/onboarding/generate` against the dev API stores a real tour and breaks the onboarding empty-state flow** — SPEC-02 AC-104 expects the seeded `acme/payments-api` to have no stored tour. Any generate call against the dev DB, including a `curl` smoke test by an agent (the dev API under tsx watch hot-reloads new routes, so this is tempting), stores a `no_data` tour row for that repo. After that, the non-hermetic flow fails. Agents may be blocked from deleting it by the permission classifier. Run the flow with `npm run e2e:hermetic`, or have the user run `delete from onboarding where repo_id='<seeded id>'` in `docker exec devdigest-postgres psql -U devdigest -d devdigest`.
   Where: `e2e/docs/specs/onboarding-tour.md:13` (AC-104), `server/src/modules/onboarding/routes.ts` (the generate route)
 
@@ -34,6 +38,10 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `specs/08-smart-diff.flow.json:12` (the `wait --text` step), `../client/src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/_components/DiffGroup/styles.ts:16` (`textTransform: "uppercase"`)
 
 ## Recurring Errors & Fixes
+
+- **2026-10-11 · In a fresh worktree `e2e:hermetic` boots the whole stack and only then fails with `sh: tsx: command not found`** — `scripts/e2e.sh` installs dependencies for server, client, reviewer-core and agent-runner, but not for `e2e/` itself. It also does not check for the global `agent-browser` CLI. That costs about a minute of Postgres, API and Next boot before the failure. Before the first run in a new checkout: `cd e2e && npm ci`, then `which agent-browser` (one-time `npm i -g agent-browser && agent-browser install`, per `e2e/AGENTS.md:5`).
+  Where: `scripts/e2e.sh:116-124` (`install_if_needed` list)
+
 
 - **2026-10-07 · The 13th flow of a hermetic run hits the API's global rate limit: its fetches answer 429 and `wait --text` for data-driven text fails with no visible error** — Flow 13 passed "Eval case created", then `wait --text "Must find: Hardcoded Stripe…"` on the Evals tab timed out. The captured API log showed every `GET /agents/:id/eval-cases` and `/eval-runs` answering `429` — the suite had sent more than 120 requests in the sliding minute (PR-page polling in flows 04–12 plus TanStack's `retry: 1`), and the global `@fastify/rate-limit` cap is 120/min unless `NODE_ENV=test`. The browser shows a toast at most; the flow only sees a missing text. Fix: `scripts/e2e.sh` exports `RATE_LIMIT_MAX=2000` and `server/src/platform/config.ts` reads it (default 120). Diagnose any late-flow "text never appears" by `grep -c '"statusCode": 429'` on the captured log before touching the flow. (×1)
   Where: `../scripts/e2e.sh` (`export RATE_LIMIT_MAX`), `../server/src/app.ts:106` (`app.register(rateLimit, { max: … })`)

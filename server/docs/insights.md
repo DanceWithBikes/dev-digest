@@ -65,6 +65,9 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   Where: `test/routes-smoke.test.ts:7` (the "No-DB" claim), `test/routes-smoke.test.ts:15` (`buildApp({ config })`), `src/app.ts:43` (`createDb(config.databaseUrl)` when no `opts.db`), `src/app.ts:81` (`reapStaleRuns` on boot)
 
 ## Tool & Library Notes
+- **2026-10-11 · Fastify's querystring parser returns a string for a key sent once and an array only when the key repeats** — `?triggers=opened&triggers=synchronize` parses to `['opened','synchronize']`, but `?triggers=reopened` parses to `'reopened'`. A route whose query schema is `z.array(...)` therefore rejects every single-value request with 422, and a test that only sends two values stays green. Instead: wrap array query fields in the route with `z.preprocess(v => v === undefined || Array.isArray(v) ? v : [v], …)`, and keep the shared contract plain so both copies stay identical. Always test the one-value case.
+  Where: `server/src/modules/ci/routes.ts` (preview query, SPEC-05)
+
 - **2026-10-03 · Fastify 5: a body-less POST with no `content-type` is accepted, and a handler returning `null` under a nullable zod response schema sends the JSON body `null`** — No body schema and no `content-type` header (`content-length` absent or `0`) means the handler runs without body parsing. The client's `api.post` sends `body: undefined`, so `content-type` is never set. An async handler that returns `null` goes through `reply.send(null)` and the route serializer, and `PrBriefResponse.safeParse(null)` succeeds, so the response is `200` with body `null` (not empty, not `{}`). This is pinned by `test/brief.it.test.ts` ("GET returns the JSON literal null (200)…"). Use this pattern for "nothing yet" GETs instead of a 404.
   Where: `src/modules/brief/routes.ts` (`PrBriefResponse`), `node_modules/fastify/lib/handle-request.js:38` (body-less branch)
 

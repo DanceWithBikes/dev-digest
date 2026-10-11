@@ -1,4 +1,6 @@
 import { FileEvalRecordsSource, type EvalRecordsReader } from '../adapters/eval-records/file.js';
+import { FileRunnerBundleSource, type RunnerBundleReader } from '../adapters/runner-bundle/file.js';
+import { MockGitHubClient } from '../adapters/mocks.js';
 import type {
   AuthProvider,
   SecretsProvider,
@@ -60,6 +62,8 @@ export interface ContainerOverrides {
   tokenizer?: Tokenizer;
   /** Source of the evals package's records file (skills "Sync results"). */
   evalRecords?: EvalRecordsReader;
+  /** Prebuilt agent-runner bundle (Export to CI). */
+  runnerBundle?: RunnerBundleReader;
 }
 
 export class Container {
@@ -72,6 +76,7 @@ export class Container {
 
   private _git?: GitClient;
   private _github?: GitHubClient;
+  private _ciMock?: GitHubClient;
   private _codeIndex?: CodeIndex;
   private _embedder?: Embedder;
   private llmCache = new Map<string, LLMProvider>();
@@ -104,6 +109,10 @@ export class Container {
 
   get evalRecords(): EvalRecordsReader {
     return (this.overrides.evalRecords ??= new FileEvalRecordsSource(this.config.evalRecordsPath));
+  }
+
+  get runnerBundle(): RunnerBundleReader {
+    return (this.overrides.runnerBundle ??= new FileRunnerBundleSource(this.config.runnerBundlePath));
   }
 
   get agentsRepo(): AgentsRepository {
@@ -200,6 +209,17 @@ export class Container {
     if (!token) throw new ConfigError('GITHUB_TOKEN is not configured');
     this._github = new OctokitGitHubClient(token);
     return this._github;
+  }
+
+  /**
+   * GitHub client for the ci module ONLY. With `DEVDIGEST_CI_GITHUB_MOCK=true`
+   * (never in production) it is an in-memory mock so the hermetic e2e stack can
+   * preview and install without GitHub; the global `github()` is unchanged.
+   */
+  async ciGithub(): Promise<GitHubClient> {
+    if (this.overrides.github) return this.overrides.github;
+    if (this.config.ciGithubMock) return (this._ciMock ??= new MockGitHubClient());
+    return this.github();
   }
 
   /** Resolve an LLM provider by id; constructs from the secret key, cached. */

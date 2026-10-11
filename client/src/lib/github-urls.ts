@@ -40,3 +40,14 @@ export function githubBlobUrl(
   }
   return url;
 }
+
+/** The URL when it is an absolute http(s) URL, else null — guards `href`s fed by server data against `javascript:` schemes. */
+export function safeHttpUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}

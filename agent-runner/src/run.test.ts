@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -314,6 +314,89 @@ describe('runCi (T8 agent-runner orchestrator)', () => {
     expect(artifact.critical).toBe(1);
     expect(artifact.pr_number).toBe(42);
     expect(artifact.agent).toBe('Security Reviewer');
+  });
+
+  it('AC-120/121: artifact carries all identity fields, with verdict/blockers from the deterministic gate (model said approve)', async () => {
+    writeFileSync(
+      path.join(dir, 'event.json'),
+      JSON.stringify({
+        pull_request: {
+          number: 42,
+          title: 't',
+          body: 'b',
+          head: { sha: 'abc123head', repo: { fork: false } },
+        },
+      }),
+    );
+    const stub = makeStubLlm(GROUNDED_PLUS_HALLUCINATED_REVIEW); // model verdict: approve
+    const result = await runCi(
+      baseDeps({
+        llm: stub.llm,
+        fetchDiff: async () => FIXTURE_DIFF_RAW,
+        env: {
+          GITHUB_REPOSITORY: 'acme/widgets',
+          GITHUB_REPOSITORY_ID: '777',
+          GITHUB_RUN_ID: '9001',
+          GITHUB_RUN_ATTEMPT: '2',
+          DEVDIGEST_INSTALLATION_ID: 'inst-1',
+          GITHUB_EVENT_PATH: path.join(dir, 'event.json'),
+          GITHUB_TOKEN: 'ghp_test_token',
+        },
+      }),
+    );
+
+    expect(result.error).toBeUndefined();
+    const onDisk = JSON.parse(readFileSync(resultPath, 'utf8')) as unknown;
+    const parsed = CiResultArtifactSchema.safeParse(onDisk);
+    expect(parsed.success).toBe(true);
+    expect(onDisk).toMatchObject({
+      repository: 'acme/widgets',
+      repository_id: 777,
+      head_sha: 'abc123head',
+      verdict: 'request_changes',
+      blockers: 1,
+      run_id: 9001,
+      run_attempt: 2,
+      installation_id: 'inst-1',
+      model: 'deepseek/deepseek-v4-flash',
+    });
+  });
+
+  it('AC-123: neither OPENROUTER_API_KEY nor GITHUB_TOKEN reaches the artifact, stdout/stderr or the posted payload', async () => {
+    const orKey = 'sk-or-SENTINEL-0001';
+    const ghToken = 'ghp_SENTINEL_0002';
+    const out: string[] = [];
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation((...a) => void out.push(a.join(' '))),
+      vi.spyOn(console, 'error').mockImplementation((...a) => void out.push(a.join(' '))),
+      vi.spyOn(process.stdout, 'write').mockImplementation((c) => (out.push(String(c)), true)),
+      vi.spyOn(process.stderr, 'write').mockImplementation((c) => (out.push(String(c)), true)),
+    ];
+    try {
+      const { fetchImpl, calls } = makeFetchRecorder();
+      const result = await runCi(
+        baseDeps({
+          fetchDiff: async () => FIXTURE_DIFF_RAW,
+          fetchImpl,
+          env: {
+            GITHUB_REPOSITORY: 'acme/widgets',
+            GITHUB_EVENT_PATH: path.join(dir, 'event.json'),
+            GITHUB_TOKEN: ghToken,
+            OPENROUTER_API_KEY: orKey,
+          },
+        }),
+      );
+      const haystack = [
+        readFileSync(resultPath, 'utf8'),
+        JSON.stringify(result.posted),
+        JSON.stringify(calls.map((c) => c.body)),
+        out.join('\n'),
+      ].join('\n');
+      expect(haystack).not.toContain(orKey);
+      expect(haystack).not.toContain(ghToken);
+    } finally {
+      spies.forEach((s) => s.mockRestore());
+    }
   });
 
   it('Q5: an LLM/model-call error hard-fails — non-zero exit, error status, nothing posted, no artifact, no synthetic review', async () => {

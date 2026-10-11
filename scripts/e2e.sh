@@ -119,6 +119,12 @@ install_if_needed client
 # without its deps the API crashes at boot with ERR_MODULE_NOT_FOUND. It uses npm.
 [ -d reviewer-core/node_modules ] || { log "installing deps in reviewer-core"; (cd reviewer-core && npm ci); }
 
+# The ci module serves the runner bundle from agent-runner/dist/index.js, which is
+# gitignored: build it here (needs reviewer-core's node_modules, installed above).
+install_if_needed agent-runner
+log "building agent-runner bundle"
+(cd agent-runner && pnpm build)
+
 # --- migrate + seed the ISOLATED db ------------------------------------------
 # Hard guard: never let migrate/seed run against anything but the isolated port.
 case "$DATABASE_URL" in
@@ -133,6 +139,8 @@ log "seeding demo data (isolated db)"
 # --- API on :$API_PORT -------------------------------------------------------
 # tsx directly (not `pnpm start`, which needs a build; not `tsx watch`, to avoid
 # a mid-suite watcher restart).
+# ci-scoped mock GitHub (preview/install without a real token); ignored in production.
+export DEVDIGEST_CI_GITHUB_MOCK=true
 log "starting API on :$API_PORT"
 (cd server && pnpm exec tsx src/server.ts) &
 SERVER_PID=$!

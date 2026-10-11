@@ -1,4 +1,4 @@
-# Plan verification: SPEC-05 Multi-Agent Review (`docs/specs/multi-agent-review.md`, plan `docs/plans/multi-agent-review/plan.md`)
+# Plan verification: SPEC-06 Multi-Agent Review (`docs/specs/multi-agent-review.md`, plan `docs/plans/multi-agent-review/plan.md`)
 
 Repo root for every relative path below: `/Users/detrix/emdash/worktrees/dev-digest-82ca6d50/emdash-multi-agent-review-7c2jf`. Test files are shortened as follows:
 - **MAIT** = `server/test/multi-agent.it.test.ts`
@@ -154,7 +154,7 @@ This verdict is advisory. The pre-PR gate is `pr-self-review`.
 | AC-120 | active under `/multi-agent-review` | Met | `app-shell/helpers.ts:28`; `helpers.test.ts:51` |
 | AC-121 | no "p-queue"/"worktrees" | Met | `rg` matches only the test file; RVT:370 |
 | AC-122 | markdown for rationale/suggestion, titles plain | Met | `FindingCard.tsx:69`, `:88`, `:94`; `DisagreementSection.tsx:46`; `ResultsHeader.tsx:41` |
-| AC-123 | hermetic e2e flow for the seeded run | Met | `e2e/specs/14-multi-agent-review.flow.json`; e2e typecheck exit 0; 14/14 reported by main session |
+| AC-123 | hermetic e2e flow for the seeded run | Met | `e2e/specs/15-multi-agent-review.flow.json`; e2e typecheck exit 0; 14/14 reported by main session |
 | AC-125 | seed: idempotent 2-agent parent with conflict | Met | `server/src/db/seed.ts:477` `seedMultiAgentRun`; MAIT:293, :312, :343 |
 | AC-124 | CI runner unchanged | Met | `git diff --stat -- agent-runner` empty; typecheck exit 0; `pnpm test` 23/23 |
 | NFR-1 | ≤4 running, ≤6 total | Met | MAIT:437, :380; RIS:70 |
@@ -188,7 +188,7 @@ Row count: 135, matching the Step 0 count.
 **Verdict:** Met · **Evidence:** `observability.ts:53` `findings: z.array(FindingRecord)`. `FindingRecord` is `Finding` (id, suggestion, confidence, kind at `findings.ts:48-58`) plus `accepted_at`, `dismissed_at` and `learned_at` (`review-api.ts:17-19`). · **Gap:** none · **To close it:** —
 
 ### AC-6 The finding record contract shall carry a nullable `learned_at` timestamp.
-**Verdict:** Met · **Evidence:** `review-api.ts:19`; column `learned_at` in `server/src/db/migrations/0022_cheerful_agent_brand.sql:1`. · **Gap:** none · **To close it:** —
+**Verdict:** Met · **Evidence:** `review-api.ts:19`; column `learned_at` in `server/src/db/migrations/0023_smart_komodo.sql:1`. · **Gap:** none · **To close it:** —
 
 ### AC-7 The `ConflictTake` contract's `verdict` shall accept a severity, `ignored` or `no_result`.
 **Verdict:** Met · **Evidence:** `observability.ts:65`; CT:484 passes. · **Gap:** none · **To close it:** —
@@ -356,7 +356,7 @@ Row count: 135, matching the Step 0 count.
 **Verdict:** Met · **Evidence:** `PrDetailHeader.tsx` renders `RunReviewPopover`; `RunReviewPopover.tsx:80` heading, `:97-113` one row per agent; `prReview.json` `pickAgents`; RPT:47. · **Gap:** none · **To close it:** —
 
 ### AC-62 WHEN the popover opens, the studio shall check every enabled agent and leave every disabled agent unchecked.
-**Verdict:** Partially met · **Evidence:** It holds for 6 or fewer enabled agents (`RunReviewPopover.tsx:35` → `lib/multi-agent.ts:10-15`; RPT:47). With more than 6 enabled agents, `lib/multi-agent.ts:14` `.slice(0, MAX_AGENTS_PER_RUN)` checks only the first 6 (RPT:76 pins this). · **Gap:** The UI 6-agent cap contradicts "check every enabled agent", and the spec was not amended. The seed has 5 agents (`server/src/db/seed.ts:224-271`), so this is invisible on seed data. · **To close it:** Either amend SPEC-05 (AC-62/63/77/78/82 plus a changelog line recording the 6-cap pre-check and the disabled-at-cap rows), or drop the client cap and let AC-17's 400 surface through AC-68.
+**Verdict:** Partially met · **Evidence:** It holds for 6 or fewer enabled agents (`RunReviewPopover.tsx:35` → `lib/multi-agent.ts:10-15`; RPT:47). With more than 6 enabled agents, `lib/multi-agent.ts:14` `.slice(0, MAX_AGENTS_PER_RUN)` checks only the first 6 (RPT:76 pins this). · **Gap:** The UI 6-agent cap contradicts "check every enabled agent", and the spec was not amended. The seed has 5 agents (`server/src/db/seed.ts:224-271`), so this is invisible on seed data. · **To close it:** Either amend SPEC-06 (AC-62/63/77/78/82 plus a changelog line recording the 6-cap pre-check and the disabled-at-cap rows), or drop the client cap and let AC-17's 400 surface through AC-68.
 
 ### AC-63 The popover shall render a disabled agent's row dimmed and keep its checkbox operable.
 **Verdict:** Partially met · **Evidence:** The disabled row is dimmed via `s.row(a.enabled)` at `RunReviewPopover.tsx:102`. Its checkbox is operable until 6 agents are checked. After that, every unchecked row, disabled ones included, gets `pointerEvents: "none"` (`:100-104`). · **Gap:** Same unrecorded cap as AC-62. · **To close it:** Same as AC-62.
@@ -539,7 +539,7 @@ Row count: 135, matching the Step 0 count.
 **Verdict:** Met · **Evidence:** Markdown is rendered by the shared `FindingCard.tsx:88`, `:94` `<Markdown>` (the same component the PR `FindingsPanel` now imports). Titles are plain text at `FindingCard.tsx:69`, `DisagreementSection.tsx:46`, `ResultsHeader.tsx:41` and `MultiAgentIndexView.tsx:54`. · **Gap:** none · **To close it:** —
 
 ### AC-123 The hermetic e2e suite shall include a flow that opens the results page of the seeded 2-agent parent run, without launching any run, and asserts that Columns mode shows 2 columns, Tabs mode shows 2 agent tabs, and the "Where agents disagree" section shows at least 1 conflict row.
-**Verdict:** Met · **Evidence:** `e2e/specs/14-multi-agent-review.flow.json` exists. It opens the index, clicks the #484 row (no launch step) and asserts `[data-agent-column]` count 2, 2 tab buttons plus `[data-agent-tab]` count 2, and `[data-conflict-row]` count ≥1. `cd e2e && npm run typecheck` exits 0. The seed data it relies on is proven by MAIT:312 ("2 done columns and 2 groups with 1 conflict"). · **Gap:** I did not run the 14/14 pass myself (my constraints forbid running e2e). That pass is the main session's reported result. · **To close it:** —
+**Verdict:** Met · **Evidence:** `e2e/specs/15-multi-agent-review.flow.json` exists. It opens the index, clicks the #484 row (no launch step) and asserts `[data-agent-column]` count 2, 2 tab buttons plus `[data-agent-tab]` count 2, and `[data-conflict-row]` count ≥1. `cd e2e && npm run typecheck` exits 0. The seed data it relies on is proven by MAIT:312 ("2 done columns and 2 groups with 1 conflict"). · **Gap:** I did not run the 14/14 pass myself (my constraints forbid running e2e). That pass is the main session's reported result. · **To close it:** —
 
 ### AC-125 The server seed shall create, idempotently, one finished parent run on a seeded PR with 2 `done` child runs whose persisted findings form at least 1 location group with `conflict` true.
 **Verdict:** Met · **Evidence:** `server/src/db/seed.ts:309`, `:477` `seedMultiAgentRun` (keyed on PR #484); MAIT:293, MAIT:312, MAIT:343. · **Gap:** none · **To close it:** —

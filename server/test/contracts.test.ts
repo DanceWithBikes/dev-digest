@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CiExportInput,
+  CiResultArtifact,
   Review,
   Finding,
   Intent,
@@ -505,5 +507,25 @@ describe('eval-pipeline contracts', () => {
     const e = { agent_id: 'a', median_duration_ms: null, median_cost_usd: null, runs: 0 };
     expect(RunEstimate.parse(e)).toEqual(e);
     expect(RunEstimate.safeParse({ ...e, median_duration_ms: 1.5 }).success).toBe(false);
+  });
+});
+
+describe('Export-to-CI contracts', () => {
+  const base = { findings_count: 1, cost_usd: null, agent: 'a' };
+  it('artifact without identity fields parses; with all fields parses; unknown keys are stripped', () => {
+    expect(CiResultArtifact.safeParse(base).success).toBe(true);
+    const full = {
+      ...base, repository: 'o/r', repository_id: 1, head_sha: 'abc', verdict: 'comment',
+      blockers: 0, run_id: 5, run_attempt: 1, installation_id: 'i', model: 'm',
+    };
+    expect(CiResultArtifact.parse(full)).toEqual(full);
+    expect(CiResultArtifact.parse({ ...base, token: 'secret' })).not.toHaveProperty('token');
+  });
+  it('CiExportInput rejects other targets and bad triggers; applies defaults', () => {
+    expect(CiExportInput.safeParse({ repo: 'o/r', target: 'circle' }).success).toBe(false);
+    expect(CiExportInput.safeParse({ repo: 'o/r', triggers: [] }).success).toBe(false);
+    expect(CiExportInput.safeParse({ repo: 'o/r', triggers: ['closed'] }).success).toBe(false);
+    const ok = CiExportInput.parse({ repo: 'o/r' });
+    expect(ok).toMatchObject({ target: 'gha', mode: 'open_pr', triggers: ['opened', 'synchronize'], edits: [] });
   });
 });

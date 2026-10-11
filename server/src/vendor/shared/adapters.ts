@@ -157,7 +157,48 @@ export interface CommitFilesPayload {
   base: string;
   message: string;
   files: CommitFile[];
+  /** Paths to remove in the same commit (tree entries with `sha: null`). */
+  deletePaths?: string[];
 }
+
+/** Repo metadata the CI export needs (numeric id for artifact verification). */
+export interface RepoInfo {
+  id: number;
+  full_name: string;
+}
+
+/** `compareCommits` result: commits on `head` that are not on `base`. */
+export interface CommitComparison {
+  ahead_by: number;
+  commits: { sha: string; message: string }[];
+}
+
+/** One completed GitHub Actions workflow run (GitHub's own metadata). */
+export interface WorkflowRunMeta {
+  id: number;
+  run_attempt: number;
+  head_sha: string;
+  head_branch: string | null;
+  conclusion: string | null;
+  html_url: string;
+  repository: { id: number; full_name: string };
+  pull_numbers: number[];
+  updated_at: string;
+}
+
+export interface RunArtifactMeta {
+  id: number;
+  name: string;
+  size_in_bytes: number;
+  expired: boolean;
+}
+
+export interface ListWorkflowRunsOptions {
+  status: 'completed';
+  perPage: number;
+}
+
+export type PullState = 'open' | 'closed' | 'merged';
 
 /** One commit that touched a path — just enough to chase its associated PRs. */
 export interface CommitRef {
@@ -199,6 +240,25 @@ export interface GitHubClient {
   commitFiles(repo: RepoRef, payload: CommitFilesPayload): Promise<{ branch: string }>;
   /** The open PR whose head is `branch`, if any (so re-publish reuses it). */
   findOpenPr(repo: RepoRef, branch: string): Promise<{ url: string } | null>;
+  /** Repo metadata (numeric id + canonical full name). */
+  getRepository(repo: RepoRef): Promise<RepoInfo>;
+  /** Commits on `head` not on `base`; null when `head` does not exist (404). */
+  compareCommits(repo: RepoRef, base: string, head: string): Promise<CommitComparison | null>;
+  /** Completed runs of one workflow file (newest first). */
+  listWorkflowRuns(
+    repo: RepoRef,
+    workflowFile: string,
+    opts: ListWorkflowRunsOptions,
+  ): Promise<WorkflowRunMeta[]>;
+  listRunArtifacts(repo: RepoRef, runId: number): Promise<RunArtifactMeta[]>;
+  /** Raw zip bytes of one Actions artifact. */
+  downloadArtifact(repo: RepoRef, artifactId: number): Promise<Uint8Array>;
+  getPullState(repo: RepoRef, n: number): Promise<PullState>;
+  /**
+   * Blob paths in `ref`'s tree that start with one of `prefixes`; `[]` when
+   * the ref does not exist.
+   */
+  listTreePaths(repo: RepoRef, ref: string, prefixes: string[]): Promise<string[]>;
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;

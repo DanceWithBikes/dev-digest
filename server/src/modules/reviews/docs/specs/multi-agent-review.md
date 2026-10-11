@@ -1,6 +1,6 @@
 # Spec: Multi-Agent Review — server/modules/reviews
 
-Spec ID: SPEC-05
+Spec ID: SPEC-06
 Status: implemented
 Overview: [../../../../../../docs/specs/multi-agent-review.md](../../../../../../docs/specs/multi-agent-review.md)
 

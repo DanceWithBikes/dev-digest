@@ -68,7 +68,7 @@ const INTENT_FIXTURE: Intent = {
 };
 
 /**
- * Review provider whose Review calls can be held on a gate (SPEC-05 AC-25):
+ * Review provider whose Review calls can be held on a gate (SPEC-06 AC-25):
  * while `gate` is set, every `Review` completion waits for it and `inflight` /
  * `peak` count the calls held. Intent calls (other schemas) pass straight through.
  */

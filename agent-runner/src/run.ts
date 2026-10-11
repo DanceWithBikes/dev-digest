@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import type { LLMProvider, GitHubReviewPayload, CiResultArtifact } from '@devdigest/shared';
+import type { LLMProvider, GitHubReviewPayload, CiResultArtifact, Verdict } from '@devdigest/shared';
 import { reviewPullRequest, toReviewPayload, gateTriggered, countBlockers } from '@devdigest/reviewer-core';
 import { loadManifest } from './manifest.js';
 import { loadSkillBodies } from './skills.js';
@@ -31,6 +31,12 @@ import { RunnerError } from './errors.js';
  * state; the whole point is that a failure anywhere upstream of "we have a
  * grounded review" produces NOTHING (no synthetic review skeleton).
  */
+
+const EVENT_TO_VERDICT: Record<GitHubReviewPayload['event'], Verdict> = {
+  REQUEST_CHANGES: 'request_changes',
+  COMMENT: 'comment',
+  APPROVE: 'approve',
+};
 
 export type PostAs = 'github_review' | 'pr_comment' | 'none';
 
@@ -145,6 +151,16 @@ export async function runCi(deps: RunCiDeps): Promise<RunCiResult> {
       durationMs,
       agent: manifest.name,
       prNumber: ctx.prNumber,
+      repository: `${ctx.owner}/${ctx.repo}`,
+      repositoryId: ctx.repositoryId,
+      headSha: ctx.headSha,
+      // Deterministic gate output only (AC-121), never `outcome.review.verdict`.
+      verdict: EVENT_TO_VERDICT[payload.event],
+      blockers,
+      runId: ctx.runId,
+      runAttempt: ctx.runAttempt,
+      installationId: ctx.installationId,
+      model: manifest.model,
     });
     writeFile(deps.resultPath, `${JSON.stringify(artifact, null, 2)}\n`);
 

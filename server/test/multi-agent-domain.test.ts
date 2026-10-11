@@ -1,5 +1,5 @@
 /**
- * SPEC-05 multi-agent domain rules (pure, no Docker): parent status and totals
+ * SPEC-06 multi-agent domain rules (pure, no Docker): parent status and totals
  * (AC-34-AC-41), column order, location grouping (AC-42-AC-49), takes and
  * conflicts (AC-51-AC-56), estimates (AC-59, AC-60).
  */

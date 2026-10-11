@@ -81,6 +81,9 @@ flowchart TB
   subgraph Eval["Eval pipeline"]
     evalMod["eval<br/>/findings/:id/eval-case · /agents/:id/eval-cases · /eval-cases/:id<br/>/agents/:id/eval-runs · /eval-runs/:id · /eval/overview"]
   end
+  subgraph CiExport["Export to CI"]
+    ciMod["ci<br/>GET /agents/:id/export-ci/preview · POST /agents/:id/export-ci<br/>GET /agents/:id/ci-installations · GET /ci-runs"]
+  end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
   end
@@ -99,7 +102,7 @@ workspace, and a server error when the model fails or 90 s pass (the stored brie
 kept). Routes: `src/modules/brief/routes.ts:17`, `:26`; module rules:
 `src/modules/brief/AGENTS.md`; spec: `../docs/specs/pr-brief.md`.
 
-**Multi-agent review (SPEC-05).** `POST /pulls/:id/review` takes `agentId`, `all` or `agentIds`
+**Multi-agent review (SPEC-06).** `POST /pulls/:id/review` takes `agentId`, `all` or `agentIds`
 (1–6 ids; combining `agentIds` with the others is a 400 `invalid_run_request`, an id outside
 the workspace a 404). With `agentIds` it creates one `multi_agent_runs` parent and one `queued`
 child `agent_runs` per distinct id in one transaction, and returns the parent id as
@@ -117,6 +120,7 @@ runs on its current model, `:27`) and `GET /multi-agent-runs/:id` (columns in se
 location groups with one take per agent, `conflict` flags; a non-uuid id is a 404, `:37`).
 Status, totals and groups are derived on read and nothing is stored. Module rules:
 `src/modules/multi-agent/AGENTS.md`; spec: `../docs/specs/multi-agent-review.md`.
+The `ci` module exports an agent to a repo's GitHub Actions and pulls the results back. `GET /agents/:id/export-ci/preview` returns the six generated files for an imported repo and makes no GitHub call; `POST /agents/:id/export-ci` either commits them as one commit on `devdigest/ci` and opens (or reuses) the PR (`mode: open_pr`) or returns a base64 zip (`mode: zip`); `GET /agents/:id/ci-installations` lists the agent's installations; `GET /ci-runs` first ingests new completed Actions runs through the GitHub API, verifies each `devdigest-result.json` against GitHub's run metadata, and then returns the stored runs, 50 per page, with a warning per repo that failed to refresh. Validation failures are 422, a repo already installed by another agent or a foreign commit on `devdigest/ci` is 409, and a 403/404 from GitHub on a write is 403 `github_write_denied`. The preview and install need the prebuilt runner bundle: build it with `cd agent-runner && pnpm build` (the API never builds it). Routes: `src/modules/ci/routes.ts:38`, `:47`, `:56`, `:65`; module rules: `src/modules/ci/AGENTS.md`; spec: `../docs/specs/export-to-ci.md`.
 
 ## MCP server (stdio)
 
@@ -149,6 +153,8 @@ Full picture, the start→poll sequence, and the local-DB-only PR/repo resolver:
 | `EMBEDDINGS_ENABLED` | `false` | memory/RAG embeddings (OpenAI); off → **zero** OpenAI calls |
 | `REPO_INTEL_ENABLED` | `true` | repo skeleton + callers in the prompt; `false` → ripgrep-only |
 | `DEVDIGEST_CLONE_DIR` | `./clones` | imported-repo checkouts (git-ignored) |
+| `DEVDIGEST_RUNNER_BUNDLE_PATH` | `<repo>/agent-runner/dist/index.js` | the prebuilt runner bundle the `ci` module ships into target repos; a relative path resolves from the server cwd; build it with `cd agent-runner && pnpm build` |
+| `DEVDIGEST_CI_GITHUB_MOCK` | — | `true` serves the `ci` module's GitHub calls from the in-memory mock (hermetic e2e); dev/test only, ignored when `NODE_ENV=production` |
 | `RATE_LIMIT_MAX` | `120` | global rate limit, requests per minute per client (e2e raises it) |
 | `LOG_LEVEL` | `info` (`silent` in test) | pino level |
 | `NODE_ENV` | `development` | `test` → silent logs + global rate-limit disabled |

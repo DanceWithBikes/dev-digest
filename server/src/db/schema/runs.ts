@@ -32,7 +32,7 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
-  /** Parent launch when this run was started by a multi-agent launch (SPEC-05). */
+  /** Parent launch when this run was started by a multi-agent launch (SPEC-06). */
   multiAgentRunId: uuid('multi_agent_run_id').references(() => multiAgentRuns.id, { onDelete: 'set null' }),
   /** queued → running transition; null while queued and on rows that predate it. */
   startedAt: timestamp('started_at', { withTimezone: true }),

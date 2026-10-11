@@ -1,4 +1,4 @@
-/* DisagreementSection — "Where agents disagree" (SPEC-05 AC-111..AC-116). */
+/* DisagreementSection — "Where agents disagree" (SPEC-06 AC-111..AC-116). */
 import React from "react";
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";

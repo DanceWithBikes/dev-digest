@@ -81,7 +81,7 @@ Format and rules: `.claude/skills/engineering-insights/SKILL.md`.
   **Correction (2026-09-19):** the real clamp is `Math.min(focusIdx, Math.max(shown.length - 1, 0))` — the inner `Math.max` keeps `focus` at 0 instead of -1 when the filter leaves nothing to show.
 
 ## Tool & Library Notes
-- **2026-10-11 · Vendor `Checkbox` has no `disabled` prop** — To cap a selection (SPEC-05: 6 agents per run) wrap it in an element with `aria-disabled`, `opacity: 0.5`, `pointerEvents: "none"`, AND guard the toggle handler, since keyboard activation bypasses `pointerEvents`.
+- **2026-10-11 · Vendor `Checkbox` has no `disabled` prop** — To cap a selection (SPEC-06: 6 agents per run) wrap it in an element with `aria-disabled`, `opacity: 0.5`, `pointerEvents: "none"`, AND guard the toggle handler, since keyboard activation bypasses `pointerEvents`.
   Where: `src/vendor/ui/kit/Checkbox.tsx:5` (`Checkbox`)
 
 - **2026-10-11 · Vendor `Tabs` and `Toggle` cannot carry `data-*`/`aria-*` per item** — `Tabs` renders its tab buttons itself from a plain `{id,label}` list, so a hook placed on the active panel always counts 1. For e2e counting, render a marker per item in the route component (or count the tab buttons inside the Tabs container); give `Toggle` its accessible name by wrapping it in a `<label>`.

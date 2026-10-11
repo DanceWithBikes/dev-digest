@@ -32,6 +32,36 @@ describe('mock adapters (no network)', () => {
     expect(url).toContain('github.com');
   });
 
+  it('MockGitHubClient.compareCommits is null before a commit, then lists it; listTreePaths honours deletes', async () => {
+    const gh = new MockGitHubClient();
+    const repo = { owner: 'a', name: 'b' };
+    expect(await gh.compareCommits(repo, 'main', 'devdigest/ci')).toBeNull();
+    expect(await gh.listTreePaths(repo, 'devdigest/ci', ['.devdigest/'])).toEqual([]);
+    await gh.commitFiles(repo, {
+      branch: 'devdigest/ci',
+      base: 'main',
+      message: 'm1',
+      files: [
+        { path: '.devdigest/agents/old.yaml', contents: 'x' },
+        { path: 'README.md', contents: 'y' },
+      ],
+    });
+    const cmp = await gh.compareCommits(repo, 'main', 'devdigest/ci');
+    expect(cmp?.ahead_by).toBe(1);
+    expect(cmp?.commits[0]!.message).toBe('m1');
+    expect(await gh.listTreePaths(repo, 'devdigest/ci', ['.devdigest/'])).toEqual([
+      '.devdigest/agents/old.yaml',
+    ]);
+    await gh.commitFiles(repo, {
+      branch: 'devdigest/ci',
+      base: 'main',
+      message: 'm2',
+      files: [],
+      deletePaths: ['.devdigest/agents/old.yaml'],
+    });
+    expect(await gh.listTreePaths(repo, 'devdigest/ci', ['.devdigest/'])).toEqual([]);
+  });
+
   it('MockGitHubClient.listCommitsForPath returns the fixture, capped at limit; unknown path is empty', async () => {
     const gh = new MockGitHubClient({
       commitsByPath: { 'src/shared.ts': [{ sha: 'a1' }, { sha: 'a2' }, { sha: 'a3' }] },

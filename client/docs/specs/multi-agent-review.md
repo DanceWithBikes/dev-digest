@@ -1,6 +1,6 @@
 # Spec: Multi-Agent Review — client
 
-Spec ID: SPEC-05
+Spec ID: SPEC-06
 Status: implemented
 Overview: [../../../docs/specs/multi-agent-review.md](../../../docs/specs/multi-agent-review.md)
 

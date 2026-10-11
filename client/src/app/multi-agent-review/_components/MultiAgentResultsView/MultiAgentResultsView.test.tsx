@@ -1,4 +1,4 @@
-/* MultiAgentResultsView — /multi-agent-review/[id] (SPEC-05 AC-89..AC-110, AC-121, AC-122, NFR-7, NFR-9).
+/* MultiAgentResultsView — /multi-agent-review/[id] (SPEC-06 AC-89..AC-110, AC-121, AC-122, NFR-7, NFR-9).
 
    Boundary mocks: the multi-agent / reviews / evals hooks, the router and the
    shell. The view, header, toggle, columns, tabs, score ring, disagreement

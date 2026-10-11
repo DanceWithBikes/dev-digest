@@ -1,4 +1,4 @@
-import type { Finding } from '@devdigest/shared';
+import type { Finding, Verdict } from '@devdigest/shared';
 import { CiResultArtifact } from '@devdigest/shared';
 import { RunnerError } from './errors.js';
 
@@ -11,6 +11,17 @@ export interface BuildResultArtifactInput {
   durationMs: number;
   agent: string;
   prNumber: number;
+  /** Identity fields (AC-120); omitted when the workflow did not provide them. */
+  repository?: string;
+  repositoryId?: number;
+  headSha?: string;
+  /** Deterministic verdict from the gate, never the model's self-report (AC-121). */
+  verdict: Verdict;
+  blockers: number;
+  runId?: number;
+  runAttempt?: number;
+  installationId?: string;
+  model: string;
 }
 
 function severityCounts(findings: Finding[]): { critical: number; warning: number; suggestion: number } {
@@ -41,6 +52,15 @@ export function buildResultArtifact(input: BuildResultArtifactInput): CiResultAr
     agent: input.agent,
     version: RUNNER_VERSION,
     pr_number: input.prNumber,
+    repository: input.repository,
+    repository_id: input.repositoryId,
+    head_sha: input.headSha,
+    verdict: input.verdict,
+    blockers: input.blockers,
+    run_id: input.runId,
+    run_attempt: input.runAttempt,
+    installation_id: input.installationId,
+    model: input.model,
   };
   const result = CiResultArtifact.safeParse(candidate);
   if (!result.success) {

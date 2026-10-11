@@ -1,4 +1,4 @@
-/* MultiAgentIndexView — /multi-agent-review (SPEC-05 AC-117, AC-118). */
+/* MultiAgentIndexView — /multi-agent-review (SPEC-06 AC-117, AC-118). */
 import React from "react";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";

@@ -1,4 +1,4 @@
-/* ConfigureRunView — /multi-agent-review/new (SPEC-05 AC-71..AC-88).
+/* ConfigureRunView — /multi-agent-review/new (SPEC-06 AC-71..AC-88).
 
    Hooks and the router are the boundary (mocked by the exact specifiers the view
    imports); the view, AgentCard and the estimate maths run for real. */

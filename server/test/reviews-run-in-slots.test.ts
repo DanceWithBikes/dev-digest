@@ -66,7 +66,7 @@ describe('runInSlots', () => {
   });
 });
 
-describe('runInSlots - SPEC-05 launch semantics', () => {
+describe('runInSlots - SPEC-06 launch semantics', () => {
   it('pins the launch concurrency cap at 4 (AC-20, NFR-1)', () => {
     expect(MAX_PARALLEL_AGENTS).toBe(4);
   });

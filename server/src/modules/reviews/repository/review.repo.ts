@@ -163,7 +163,7 @@ export async function setFindingDismissed(
   return row;
 }
 
-/** Learn (SPEC-05): sets ONLY `learnedAt`; accepted/dismissed stay untouched. */
+/** Learn (SPEC-06): sets ONLY `learnedAt`; accepted/dismissed stay untouched. */
 export async function setFindingLearned(
   db: Db,
   findingId: string,

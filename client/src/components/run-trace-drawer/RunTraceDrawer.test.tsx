@@ -89,7 +89,7 @@ describe("A5 Run Trace drawer (smoke)", () => {
   });
 });
 
-describe("Run Trace drawer — live stream ownership (SPEC-05 NFR-7)", () => {
+describe("Run Trace drawer — live stream ownership (SPEC-06 NFR-7)", () => {
   it("opens its own stream for a running run when no stream is handed in", () => {
     renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} running onClose={() => {}} />);
     expect(state.subscribed.every((ids) => ids.length === 1 && ids[0] === "r1")).toBe(true);

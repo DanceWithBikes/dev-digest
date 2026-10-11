@@ -1,5 +1,5 @@
 /**
- * Multi-agent review constants (SPEC-05).
+ * Multi-agent review constants (SPEC-06).
  */
 import type { Severity } from '@devdigest/shared';
 

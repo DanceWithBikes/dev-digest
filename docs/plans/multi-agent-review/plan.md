@@ -1,4 +1,4 @@
-# Implementation Plan: Multi-Agent Review (SPEC-05)
+# Implementation Plan: Multi-Agent Review (SPEC-06)
 
 ## Goal
 
@@ -6,7 +6,7 @@ A reviewer picks any subset of agents on the PR page, or on a new Configure run 
 
 ## Requirements
 
-- Source: `docs/specs/multi-agent-review.md`, Spec ID SPEC-05, Status: approved. Parts, all approved: `client/docs/specs/multi-agent-review.md`, `server/docs/specs/multi-agent-review.md` (it also holds the new module's AC-31…AC-60), `server/src/modules/reviews/docs/specs/multi-agent-review.md`, `e2e/docs/specs/multi-agent-review.md`.
+- Source: `docs/specs/multi-agent-review.md`, Spec ID SPEC-06, Status: approved. Parts, all approved: `client/docs/specs/multi-agent-review.md`, `server/docs/specs/multi-agent-review.md` (it also holds the new module's AC-31…AC-60), `server/src/modules/reviews/docs/specs/multi-agent-review.md`, `e2e/docs/specs/multi-agent-review.md`.
 - Gate check: every part says `Status: approved`. `grep "NEEDS CLARIFICATION"` finds nothing. OQ-6 is struck through. OQ-1…OQ-5 are open with `blocks: none`, so their stated defaults are adopted:
   - OQ-1: mixed `agentIds` + `agentId`/`all` → 400 `invalid_run_request`.
   - OQ-2: only `agentIds` launches create a parent.
@@ -98,7 +98,7 @@ A reviewer picks any subset of agents on the PR page, or on a new Configure run 
 | client | `messages/en/{prReview,runs}.json` | copy | all new strings; remove "p-queue" |
 | client | `src/app/repos/[repoId]/pulls/[number]/**` | route (PR) | popover replaces dropdown; importers of the moved components |
 | client | `src/app/multi-agent-review/**` (NEW) | route | index, Configure run, results |
-| e2e | `specs/14-multi-agent-review.flow.json` (NEW) | e2e | AC-123 |
+| e2e | `specs/15-multi-agent-review.flow.json` (NEW) | e2e | AC-123 |
 
 ## Steps
 
@@ -363,7 +363,7 @@ A reviewer picks any subset of agents on the PR page, or on a new Configure run 
 - **Change:**
   - `prReview.runReview`: `pickAgents` ("PICK AGENTS TO RUN"), `clear`, `runMulti` ("Run multi-agent review ({count})"); keep `configureAgents`, `mergedWarning`.
   - `prReview.finding`: `learn`, `learned`.
-  - `runs.page`: rewrite for SPEC-05. `meta` becomes "{count} selected agents · parallel"; `summary` is "{count} agents · parallel · {duration}s total · {cost}"; add `partial`, `crumb`, `configureRun`, `notFound`, `view.columns` / `view.tabs`, index empty-state copy. The "fan-out via p-queue" string at `runs.json:127` is removed (AC-121).
+  - `runs.page`: rewrite for SPEC-06. `meta` becomes "{count} selected agents · parallel"; `summary` is "{count} agents · parallel · {duration}s total · {cost}"; add `partial`, `crumb`, `configureRun`, `notFound`, `view.columns` / `view.tabs`, index empty-state copy. The "fan-out via p-queue" string at `runs.json:127` is removed (AC-121).
   - New `runs.configure` block with the AC-71 / AC-72 / AC-75 / AC-81 / AC-83 / AC-85 strings.
   - `runs.conflicts.noResult` ("no result").
   - No literal English in any new TSX (NFR-8).
@@ -570,7 +570,7 @@ A reviewer picks any subset of agents on the PR page, or on a new Configure run 
 - **Done when:** `cd client && pnpm test && pnpm arch:check` are green.
 
 ### Step T4 — Write the e2e flow 14
-- **Files:** `e2e/specs/14-multi-agent-review.flow.json` (NEW)
+- **Files:** `e2e/specs/15-multi-agent-review.flow.json` (NEW)
 - **Change:**
   1. `open {BASE}/multi-agent-review` → `wait --text "Tighten /v1/payments query params"`.
   2. `eval` scroll-into-view on the row, then `find text "Tighten /v1/payments query params" click --exact` → `wait --url "/multi-agent-review/"` → `wait --text "Where agents disagree"`.
@@ -745,4 +745,4 @@ Medium-High. Every anchor, importer, rule and reused symbol named above was open
 Worth recording via `engineering-insights`:
 - `server/src/modules/reviews/docs/insights.md`: `POST /findings/:id/reply` has never had a route. `FINDING_ACTIONS` is `['accept', 'dismiss']` (`routes.ts:20`), so it answers Fastify's 404, and the `invalid_action` branch in `findings.ts:31` is unreachable for `reply`.
 - `server/docs/insights.md`: `POST /pulls/:id/review` parses its body by hand (`RunRequest.parse`, `routes.ts:34`), and `app.ts:149-162` maps any `ZodError` to **422**. A spec that wants a 400 for a body-shape rule needs an explicit `AppError` mapping in the route.
-- `server/src/modules/reviews/docs/insights.md`: before SPEC-05, `agent_runs` had no start or finish timestamps. `ran_at` is the enqueue time, and `duration_ms` is measured from `runOneAgent`'s start, so wall-clock spans across runs were not derivable.
+- `server/src/modules/reviews/docs/insights.md`: before SPEC-06, `agent_runs` had no start or finish timestamps. `ran_at` is the enqueue time, and `duration_ms` is measured from `runOneAgent`'s start, so wall-clock spans across runs were not derivable.

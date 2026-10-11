@@ -235,7 +235,7 @@ export async function completeAgentRun(
 }
 
 /**
- * Multi-agent launch (SPEC-05): in ONE transaction insert the parent run (with
+ * Multi-agent launch (SPEC-06): in ONE transaction insert the parent run (with
  * the selection order in `agent_ids`) and one `queued`, `local` child run per
  * agent, in order. Either every row exists or none does.
  */

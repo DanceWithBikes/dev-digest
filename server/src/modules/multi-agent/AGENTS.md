@@ -4,7 +4,7 @@ A multi-agent launch is one `multi_agent_runs` parent with one `agent_runs` chil
 The parent is **written** by the `reviews` module (the `agentIds` trigger on `POST /pulls/:id/review`);
 this module only **reads**: `GET /multi-agent-runs` (50 newest), `GET /multi-agent-runs/estimates`,
 `GET /multi-agent-runs/:id` (columns, location groups, conflicts). Spec: `../../../../docs/specs/multi-agent-review.md`
-(SPEC-05; this module's criteria AC-31…AC-60 are in `docs/specs/multi-agent-review.md`).
+(SPEC-06; this module's criteria AC-31…AC-60 are in `docs/specs/multi-agent-review.md`).
 
 ## Layers (flat module)
 `routes.ts` → `service.ts` → `repository.ts` (the only file touching drizzle / `src/db`) + `ports.ts` +

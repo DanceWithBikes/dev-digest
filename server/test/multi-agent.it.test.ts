@@ -1,5 +1,5 @@
 /**
- * SPEC-05 Multi-agent review - server integration (real Postgres).
+ * SPEC-06 Multi-agent review - server integration (real Postgres).
  *
  * Pins the AC-125 seed (idempotent, one finished 2-agent parent on PR #484 with
  * exactly one conflict group), the three read routes, the `agentIds` trigger,

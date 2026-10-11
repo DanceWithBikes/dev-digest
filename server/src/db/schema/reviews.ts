@@ -43,7 +43,7 @@ export const findings = pgTable('findings', {
   trifectaComponents: jsonb('trifecta_components').$type<string[]>(),
   acceptedAt: timestamp('accepted_at', { withTimezone: true }),
   dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
-  /** Set by the Learn action (SPEC-05); independent of accepted/dismissed. */
+  /** Set by the Learn action (SPEC-06); independent of accepted/dismissed. */
   learnedAt: timestamp('learned_at', { withTimezone: true }),
 });
 

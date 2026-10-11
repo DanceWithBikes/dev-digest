@@ -29,7 +29,7 @@ export async function actOnFinding(
       return { finding: findingRowToDto(row!) };
     }
     case 'learn': {
-      // Bookkeeping only: no model call, no memory, no eval case (SPEC-05 AC-29).
+      // Bookkeeping only: no model call, no memory, no eval case (SPEC-06 AC-29).
       const row = await repo.setFindingLearned(findingId, new Date());
       return { finding: findingRowToDto(row!) };
     }

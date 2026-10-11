@@ -469,7 +469,7 @@ async function seedFixturePrs(db: Db, workspaceId: string, repoId: string): Prom
 }
 
 /**
- * SPEC-05 AC-125 — one finished 2-agent parent run on PR #484 (API Contract +
+ * SPEC-06 AC-125 — one finished 2-agent parent run on PR #484 (API Contract +
  * Security reviewers) with a group both agree on and one only API Contract
  * flagged (a conflict). Idempotent by key: skipped when #484 already has a
  * `seed` child run attached to a parent; never updated.

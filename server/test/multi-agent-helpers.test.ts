@@ -1,5 +1,5 @@
 /**
- * SPEC-05 multi-agent DTO mappers and read service (pure; the service runs on
+ * SPEC-06 multi-agent DTO mappers and read service (pure; the service runs on
  * an in-memory MultiAgentStore fake). Pins the contract shapes (AC-4-AC-12),
  * the 404 for non-uuid ids (AC-33), one estimate per agent (AC-58) and that no
  * model call is made (AC-57: the service has no LLM dependency at all).

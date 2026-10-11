@@ -28,6 +28,12 @@ export class InvalidRunRequestError extends AppError {
   }
 }
 
+export class ForbiddenError extends AppError {
+  constructor(message = 'Forbidden', details?: unknown, code = 'forbidden') {
+    super(code, message, 403, details);
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message = 'Validation failed', details?: unknown) {
     super('validation_error', message, 422, details);

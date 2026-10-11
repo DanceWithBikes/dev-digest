@@ -1,6 +1,6 @@
 # Spec: Multi-Agent Review — server/modules/multi-agent
 
-Spec ID: SPEC-05
+Spec ID: SPEC-06
 Status: implemented
 Overview: [../../../../../../docs/specs/multi-agent-review.md](../../../../../../docs/specs/multi-agent-review.md)
 
@@ -47,5 +47,5 @@ The new `multi-agent` module is the read side of a multi-agent launch. It lists 
 - Every read is scoped by workspace in its SQL; the module reads `agent_runs`, `findings` and `agents` through its own repository and never imports the `reviews` module's folder — `../../AGENTS.md`, `../../../AGENTS.md` ("Never import another module's folder").
 - `GET /multi-agent-runs/:id` deliberately does not use `IdParams`, so a non-uuid id answers 404 (AC-33) instead of 422 — `../../routes.ts:36`, `../insights.md`.
 - `GET /multi-agent-runs` returns at most `LIST_LIMIT` (50) parents, no pagination (OQ-4 default) — `../../constants.ts:16`.
-- Status and totals use `agent_runs.started_at` and `finished_at`, which this feature added; while no child has finished the total duration is 0 — `../../domain.ts:93`, `../../../../db/migrations/0022_cheerful_agent_brand.sql:3`.
+- Status and totals use `agent_runs.started_at` and `finished_at`, which this feature added; while no child has finished the total duration is 0 — `../../domain.ts:93`, `../../../../db/migrations/0023_smart_komodo.sql:3`.
 - A deleted agent leaves its child run with a null `agent_id`; `orderColumns` gives that run the first selected slot nobody else claimed — `../../domain.ts:109`.

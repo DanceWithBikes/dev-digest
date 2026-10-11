@@ -1,0 +1,33 @@
+name: DevDigest Review
+on:
+  pull_request:
+    types:
+      - opened
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: DevDigest review
+        run: node .devdigest/runner/index.js
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DEVDIGEST_POST_AS: github_review
+          DEVDIGEST_INSTALLATION_ID: 04d6e6fe-de2e-547f-81e1-1e7b1e80313e
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() }}
+        with:
+          name: devdigest-result
+          path: devdigest-result.json
+          if-no-files-found: ignore

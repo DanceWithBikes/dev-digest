@@ -40,6 +40,14 @@ export const NAV: NavGroup[] = [
       { key: "eval", label: "Eval Dashboard", icon: "FlaskConical", href: "/eval", gKey: "e" },
     ],
   },
+  /* Cross-repo screens. Section header and label are literals like every other
+     entry here (the nav is not routed through next-intl). */
+  {
+    section: "GLOBAL",
+    items: [
+      { key: "multi-agent", label: "Multi-Agent Review", icon: "Layers", href: "/multi-agent-review" },
+    ],
+  },
 ];
 
 export const SETTINGS_ITEM: NavItemDef = {

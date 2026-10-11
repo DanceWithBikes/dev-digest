@@ -69,7 +69,8 @@ flowchart TB
     polling["polling<br/>/repos/:id/poll"]
   end
   subgraph Review["Review & runs"]
-    reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]
+    reviews["reviews<br/>/pulls/:id/review (agentId · all · agentIds) · /reviews<br/>/findings/:id/(accept|dismiss|learn) · /runs/:id/(events|trace)"]
+    multiAgent["multi-agent<br/>GET /multi-agent-runs · /multi-agent-runs/estimates · /multi-agent-runs/:id"]
   end
   subgraph Brief["PR Brief"]
     brief["brief<br/>/pulls/:id/brief (GET stored · POST generate)"]
@@ -97,6 +98,25 @@ flowchart TB
 workspace, and a server error when the model fails or 90 s pass (the stored brief is
 kept). Routes: `src/modules/brief/routes.ts:17`, `:26`; module rules:
 `src/modules/brief/AGENTS.md`; spec: `../docs/specs/pr-brief.md`.
+
+**Multi-agent review (SPEC-05).** `POST /pulls/:id/review` takes `agentId`, `all` or `agentIds`
+(1–6 ids; combining `agentIds` with the others is a 400 `invalid_run_request`, an id outside
+the workspace a 404). With `agentIds` it creates one `multi_agent_runs` parent and one `queued`
+child `agent_runs` per distinct id in one transaction, and returns the parent id as
+`multi_agent_run_id` (`null` for `agentId`/`all`) — `src/modules/reviews/routes.ts:36`,
+`src/modules/reviews/service.ts:153`, `src/modules/reviews/repository/run.repo.ts:242`.
+The executor loads the diff and the PR intent once, then runs at most 4 agents of the launch
+at the same time (`MAX_PARALLEL_AGENTS`, `src/modules/reviews/constants.ts:44`,
+`runInSlots` at `src/modules/reviews/helpers.ts:177`); the rest stay `queued`. Every launch
+path shares it, MCP included. `loadDiff` throws `no diff available` for a PR with no diff
+(`src/modules/reviews/diff-loader.ts:33`), which fails every run of the launch.
+`POST /findings/:id/learn` only records `learned_at` (`src/modules/reviews/findings.ts:31`).
+The read side is `src/modules/multi-agent/routes.ts`: `GET /multi-agent-runs` (50 newest, `:18`),
+`GET /multi-agent-runs/estimates` (median duration and cost of each agent's 10 latest `done`
+runs on its current model, `:27`) and `GET /multi-agent-runs/:id` (columns in selection order,
+location groups with one take per agent, `conflict` flags; a non-uuid id is a 404, `:37`).
+Status, totals and groups are derived on read and nothing is stored. Module rules:
+`src/modules/multi-agent/AGENTS.md`; spec: `../docs/specs/multi-agent-review.md`.
 
 ## MCP server (stdio)
 

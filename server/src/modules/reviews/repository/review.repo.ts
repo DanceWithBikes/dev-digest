@@ -162,3 +162,17 @@ export async function setFindingDismissed(
     .returning();
   return row;
 }
+
+/** Learn (SPEC-05): sets ONLY `learnedAt`; accepted/dismissed stay untouched. */
+export async function setFindingLearned(
+  db: Db,
+  findingId: string,
+  at: Date | null,
+): Promise<FindingRow | undefined> {
+  const [row] = await db
+    .update(t.findings)
+    .set({ learnedAt: at })
+    .where(eq(t.findings.id, findingId))
+    .returning();
+  return row;
+}

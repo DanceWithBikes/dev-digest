@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Intent, Review } from '@devdigest/shared';
@@ -8,6 +8,7 @@ import { loadConfig } from '../src/platform/config.js';
 import { Container } from '../src/platform/container.js';
 import { seed } from '../src/db/seed.js';
 import { MockGitClient, MockGitHubClient, MockLLMProvider } from '../src/adapters/mocks.js';
+import type { StructuredRequest, StructuredResult } from '@devdigest/shared';
 import { buildMcpDeps } from '../src/mcp/compose.js';
 import { mcpLogger } from '../src/mcp/logger.js';
 import { createDevDigestMcpServer } from '../src/mcp/server.js';
@@ -66,7 +67,33 @@ const INTENT_FIXTURE: Intent = {
   out_of_scope: [],
 };
 
+/**
+ * Review provider whose Review calls can be held on a gate (SPEC-05 AC-25):
+ * while `gate` is set, every `Review` completion waits for it and `inflight` /
+ * `peak` count the calls held. Intent calls (other schemas) pass straight through.
+ */
+class GateableLLM extends MockLLMProvider {
+  gate: Promise<void> | null = null;
+  inflight = 0;
+  peak = 0;
+  async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
+    if (req.schemaName !== 'Review' || !this.gate) return super.completeStructured(req);
+    this.inflight += 1;
+    this.peak = Math.max(this.peak, this.inflight);
+    try {
+      await this.gate;
+    } finally {
+      this.inflight -= 1;
+    }
+    return super.completeStructured(req);
+  }
+}
+
 d('MCP surface (Testcontainers pg)', () => {
+  const reviewLlm = new GateableLLM('openai', {
+    structured: REVIEW_FIXTURE,
+    structuredBySchema: { pr_intent: INTENT_FIXTURE },
+  });
   let pg: PgFixture;
   let container: Container;
   let workspaceId: string;
@@ -83,12 +110,7 @@ d('MCP surface (Testcontainers pg)', () => {
     container = new Container(config(), pg.handle.db, {
       git: new MockGitClient({ diff: DIFF }),
       github: new MockGitHubClient(),
-      llm: {
-        openrouter: new MockLLMProvider('openai', {
-          structured: REVIEW_FIXTURE,
-          structuredBySchema: { pr_intent: INTENT_FIXTURE },
-        }),
-      },
+      llm: { openrouter: reviewLlm },
     });
 
     const repoName = `mcp-widgets-${Date.now()}`;
@@ -240,5 +262,59 @@ d('MCP surface (Testcontainers pg)', () => {
     expect((all.structuredContent as { conventions: unknown[] }).conventions).toHaveLength(2);
 
     await client.close();
+  });
+  it('run_agent_on_pr all:true with 5 enabled agents keeps at most 4 running and queues the 5th (AC-25)', async () => {
+    const db = pg.handle.db;
+    // Exactly 5 enabled agents on the mocked provider, whatever the seed holds.
+    const existing = await db.select().from(t.agents).where(eq(t.agents.workspaceId, workspaceId));
+    const wasEnabled = existing.filter((a) => a.enabled).map((a) => a.id);
+    const extras: string[] = [];
+    try {
+      for (const a of existing) await db.update(t.agents).set({ enabled: false }).where(eq(t.agents.id, a.id));
+      for (let i = 0; i < 5; i++) {
+        const [row] = await db
+          .insert(t.agents)
+          .values({ workspaceId, name: `Cap ${i} ${Date.now()}`, provider: 'openrouter', model: 'm', systemPrompt: 'p', enabled: true })
+          .returning();
+        extras.push(row!.id);
+      }
+
+      let release!: () => void;
+      reviewLlm.gate = new Promise<void>((r) => (release = r));
+      reviewLlm.peak = 0;
+
+      const client = await connectClient();
+      const started = await client.callTool({ name: 'run_agent_on_pr', arguments: { repo: repoFullName, number: prNumber, all: true } });
+      expect(started.isError).toBeFalsy();
+      const { runs } = started.structuredContent as { runs: { run_id: string; agent_id: string }[] };
+      expect(runs).toHaveLength(5);
+      const runIds = runs.map((r) => r.run_id);
+
+      const statuses = async () =>
+        (await db.select().from(t.agentRuns).where(inArray(t.agentRuns.id, runIds))).map((r) => r.status);
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline && (await statuses()).filter((s) => s === 'running').length < 4) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      await new Promise((r) => setTimeout(r, 150)); // a wrongly started 5th would show by now
+      const held = await statuses();
+      expect(held.filter((s) => s === 'running')).toHaveLength(4);
+      expect(held.filter((s) => s === 'queued')).toHaveLength(1);
+      expect(reviewLlm.inflight).toBeLessThanOrEqual(4);
+
+      release();
+      while (Date.now() < deadline && (await statuses()).some((s) => s !== 'done' && s !== 'failed')) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      expect((await statuses()).every((s) => s === 'done')).toBe(true);
+      expect(reviewLlm.peak).toBeLessThanOrEqual(4);
+      await client.close();
+    } finally {
+      reviewLlm.gate = null;
+      for (const a of existing) {
+        await db.update(t.agents).set({ enabled: wasEnabled.includes(a.id) }).where(eq(t.agents.id, a.id));
+      }
+      for (const id of extras) await db.update(t.agents).set({ enabled: false }).where(eq(t.agents.id, id));
+    }
   });
 });

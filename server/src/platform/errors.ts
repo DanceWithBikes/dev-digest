@@ -22,6 +22,12 @@ export class NotFoundError extends AppError {
   }
 }
 
+export class InvalidRunRequestError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super('invalid_run_request', message, 400, details);
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message = 'Validation failed', details?: unknown) {
     super('validation_error', message, 422, details);

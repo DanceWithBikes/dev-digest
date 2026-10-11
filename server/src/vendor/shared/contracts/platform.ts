@@ -304,6 +304,7 @@ export type IndexStatus = z.infer<typeof IndexStatus>;
 // ---- Run request (review trigger; owned by A2, contract lives here) ----
 export const RunRequest = z.object({
   agentId: z.string().optional(),
+  agentIds: z.array(z.string()).min(1).max(6).optional(),
   all: z.boolean().optional(),
 });
 export type RunRequest = z.infer<typeof RunRequest>;

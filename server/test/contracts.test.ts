@@ -29,6 +29,10 @@ import {
   EvalCaseActual,
   EvalAgentSummary,
   EvalOverview,
+  RunRequest,
+  ConflictTake,
+  MultiAgentRunSummary,
+  RunEstimate,
 } from '@devdigest/shared';
 
 /**
@@ -467,5 +471,39 @@ describe('eval-pipeline contracts', () => {
     expect(EvalAgentSummary.safeParse({ ...summary, trend: Array(10).fill(batch) }).success).toBe(true);
     expect(EvalAgentSummary.safeParse({ ...summary, trend: Array(11).fill(batch) }).success).toBe(false);
     expect(EvalOverview.parse({ agents: [], recent_batches: [batch] }).recent_batches).toHaveLength(1);
+  });
+  it('RunRequest.agentIds accepts 1 and 6 ids and rejects 0 and 7 (AC-2, NFR-1)', () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `a${i}`);
+    expect(RunRequest.safeParse({ agentIds: ids(1) }).success).toBe(true);
+    expect(RunRequest.safeParse({ agentIds: ids(6) }).success).toBe(true);
+    expect(RunRequest.safeParse({ agentIds: [] }).success).toBe(false);
+    expect(RunRequest.safeParse({ agentIds: ids(7) }).success).toBe(false);
+    expect(RunRequest.safeParse({}).success).toBe(true);
+  });
+
+  it('ConflictTake verdict is a severity, ignored or no_result and nothing else (AC-7-AC-9)', () => {
+    const base = { agent_id: null, persona: null, note: null };
+    for (const verdict of ['CRITICAL', 'WARNING', 'SUGGESTION', 'ignored', 'no_result']) {
+      expect(ConflictTake.safeParse({ ...base, verdict }).success).toBe(true);
+    }
+    expect(ConflictTake.safeParse({ ...base, verdict: 'maybe' }).success).toBe(false);
+    expect(ConflictTake.safeParse({ ...base, verdict: 'ignored', note: undefined }).success).toBe(false);
+  });
+
+  it('MultiAgentRunSummary requires cost_partial and allows a null total cost', () => {
+    const row = {
+      id: 'p', pr_id: 'pr', pr_number: 1, pr_title: null, ran_at: 't', status: 'partial',
+      agent_count: 2, total_duration_ms: 5, total_cost_usd: null, cost_partial: true,
+    };
+    expect(MultiAgentRunSummary.parse(row).cost_partial).toBe(true);
+    const { cost_partial: _drop, ...without } = row;
+    expect(MultiAgentRunSummary.safeParse(without).success).toBe(false);
+    expect(MultiAgentRunSummary.safeParse({ ...row, status: 'weird' }).success).toBe(false);
+  });
+
+  it('RunEstimate allows null medians with runs 0 (AC-60)', () => {
+    const e = { agent_id: 'a', median_duration_ms: null, median_cost_usd: null, runs: 0 };
+    expect(RunEstimate.parse(e)).toEqual(e);
+    expect(RunEstimate.safeParse({ ...e, median_duration_ms: 1.5 }).success).toBe(false);
   });
 });

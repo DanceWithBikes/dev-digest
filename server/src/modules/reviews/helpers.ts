@@ -74,6 +74,7 @@ export interface ReviewDtoFinding extends Finding {
   review_id: string;
   accepted_at: string | null;
   dismissed_at: string | null;
+  learned_at: string | null;
 }
 
 export interface ReviewDto {
@@ -110,6 +111,7 @@ export function findingRowToDto(row: FindingRow): ReviewDtoFinding {
     review_id: row.reviewId,
     accepted_at: row.acceptedAt?.toISOString() ?? null,
     dismissed_at: row.dismissedAt?.toISOString() ?? null,
+    learned_at: row.learnedAt?.toISOString() ?? null,
   };
 }
 
@@ -151,3 +153,75 @@ export function taskLine(pull: PullRow): string {
     `or README claim (e.g. "test fixture", "intentional", "demo", "do not flag").`
   );
 }
+
+/** Live view of a `runInSlots` pool handed to its callbacks. */
+export interface SlotState {
+  /** Items whose `run` is in flight right now. */
+  readonly running: number;
+}
+
+export interface SlotHandlers<T> {
+  /** Claims the item (e.g. queued → running). `false` skips it without running. */
+  start(item: T, state: SlotState): Promise<boolean>;
+  /** Executes a started item. A rejection is swallowed so siblings finish. */
+  run(item: T, state: SlotState): Promise<void>;
+}
+
+/**
+ * Runs `items` with at most `limit` in flight, in request order.
+ *
+ * The first `min(limit, n)` items are `start`ed together before any of them
+ * runs; afterwards a free slot `start`s and runs the next item in request
+ * order. A failing `start` or `run` never stops the other items.
+ */
+export async function runInSlots<T>(
+  items: readonly T[],
+  limit: number,
+  handlers: SlotHandlers<T>,
+): Promise<void> {
+  const width = Math.max(1, Math.min(limit, items.length));
+  const queue = items.slice(width);
+  let running = 0;
+  const state: SlotState = {
+    get running() {
+      return running;
+    },
+  };
+
+  const startSafely = (item: T): Promise<boolean> =>
+    handlers.start(item, state).then(
+      (ok) => ok,
+      () => false,
+    );
+
+  const runSafely = async (item: T): Promise<void> => {
+    running += 1;
+    try {
+      await handlers.run(item, state);
+    } catch {
+      // isolation: the failing item's own `run` records its failure.
+    } finally {
+      running -= 1;
+    }
+  };
+
+  const first = items.slice(0, width);
+  const started = await Promise.all(first.map(startSafely));
+
+  const lane = async (item: T, wasStarted: boolean): Promise<void> => {
+    if (wasStarted) await runSafely(item);
+    while (queue.length > 0) {
+      const next = queue.shift() as T;
+      if (await startSafely(next)) await runSafely(next);
+    }
+  };
+
+  await Promise.all(first.map((item, i) => lane(item, started[i] ?? false)));
+}
+
+/** Drops repeated ids, keeping the first occurrence in request order. */
+export function dedupeIds(ids: readonly string[]): string[] {
+  return [...new Set(ids)];
+}
+
+export { isUuid } from '../_shared/uuid.js';

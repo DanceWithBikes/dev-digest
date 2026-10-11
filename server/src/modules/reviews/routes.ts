@@ -4,7 +4,7 @@ import { RunRequest } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
-import { NotFoundError } from '../../platform/errors.js';
+import { InvalidRunRequestError, NotFoundError } from '../../platform/errors.js';
 import { ReviewService } from './service.js';
 
 /**
@@ -13,11 +13,11 @@ import { ReviewService } from './service.js';
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
- *   POST   /findings/:id/(accept|dismiss)              → finding actions
+ *   POST   /findings/:id/(accept|dismiss|learn)             → finding actions
  *   GET    /pulls/:id/intent                            → PrIntentRecord | null (L03)
  *   POST   /pulls/:id/intent                            → re-classify + upsert PR intent (L03)
  */
-const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
+const FINDING_ACTIONS = ['accept', 'dismiss', 'learn'] as const;
 export default async function reviewsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
@@ -31,18 +31,29 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     { schema: { params: IdParams }, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (req) => {
     const { workspaceId } = await getContext(container, req);
-    const body = RunRequest.parse(req.body ?? {});
+    // safeParse: a bad `agentIds` must answer 400 invalid_run_request, but a
+    // bare parse would surface as a ZodError (422).
+    const parsed = RunRequest.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      if (parsed.error.issues.some((i) => i.path[0] === 'agentIds')) {
+        throw new InvalidRunRequestError('agentIds must hold 1 to 6 agent ids');
+      }
+      throw parsed.error;
+    }
+    const body = parsed.data;
     const targets = await service.resolveTargets(workspaceId, {
       ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
+      ...(body.agentIds !== undefined ? { agentIds: body.agentIds } : {}),
       ...(body.all !== undefined ? { all: body.all } : {}),
     });
-    const { runs, reviews } = await service.runReview(
+    const { runs, reviews, multiAgentRunId } = await service.runReview(
       workspaceId,
       req.params.id,
       targets,
       req.log,
+      { multiAgent: body.agentIds !== undefined },
     );
-    return { pr_id: req.params.id, runs, reviews };
+    return { pr_id: req.params.id, runs, reviews, multi_agent_run_id: multiAgentRunId };
   });
 
   // ---- SSE: live run events (replay buffer first, then live; ends on done) -

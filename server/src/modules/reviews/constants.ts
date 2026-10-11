@@ -35,3 +35,10 @@ export const INTENT_TEMPERATURE = 0.2;
 /** Cap on the model's reply; an intent sentence plus a handful of scope
  *  bullets fits comfortably. */
 export const INTENT_MAX_TOKENS = 1_000;
+
+/**
+ * Multi-agent launch (SPEC-05): how many agents of one launch run at the same
+ * time. One agent's chunks stay sequential, so a launch holds at most this many
+ * concurrent provider streams.
+ */
+export const MAX_PARALLEL_AGENTS = 4;

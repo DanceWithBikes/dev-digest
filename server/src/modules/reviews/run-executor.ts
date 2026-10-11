@@ -10,8 +10,8 @@ import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
-import { CHARS_PER_TOKEN, REVIEW_STRATEGY } from './constants.js';
-import { collectContextPaths, selectSkillBodies, taskLine, type LinkedSkill } from './helpers.js';
+import { CHARS_PER_TOKEN, MAX_PARALLEL_AGENTS, REVIEW_STRATEGY } from './constants.js';
+import { collectContextPaths, runInSlots, selectSkillBodies, taskLine, type LinkedSkill } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { bodyFingerprint, deriveMissingContext, isIntentStale } from './intent-helpers.js';
 import { renderCommitsDigest, renderFilesDigest, renderIntentForPrompt } from './intent-sources.js';
@@ -138,53 +138,81 @@ export class ReviewRunExecutor {
     // `## PR intent (derived)` slot.
     const intentText = await this.deriveIntent(workspaceId, pull, repo, diff, runLog);
 
-    // Agents run one at a time; every run after the first stays `queued` (and
-    // says so in its Live Log) until the loop reaches it.
+    // Up to MAX_PARALLEL_AGENTS run at once; runs beyond that stay `queued`
+    // (and say so in their Live Log) until a slot frees.
     jobs.forEach(({ runId }, i) => {
-      if (i > 0) runLog.forRun(runId).info(`Queued — waiting for ${i} agent(s) ahead`);
+      if (i >= MAX_PARALLEL_AGENTS) runLog.forRun(runId).info('Queued — waiting for a free slot');
     });
 
-    for (const { agent, runId } of jobs) {
+    await runInSlots(jobs, MAX_PARALLEL_AGENTS, {
       // queued → running. False = cancelled while it waited: cancelRun already
       // set the status and completed the bus, so only persist its log here.
       // A DB error is treated the same way so it can't strand the runs behind it.
-      const started = await this.repo.startAgentRun(workspaceId, runId).catch((err) => {
-        logger?.error({ runId, err: (err as Error).message }, 'review: could not mark run as started');
-        return false;
-      });
-      if (!started) {
-        await this.repo
-          .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed'))
-          .catch(() => undefined);
-        continue;
-      }
-      const agentStart = Date.now();
-      logger?.info(
-        { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
-        `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
-      );
-      try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intentText);
+      start: async ({ agent, runId }) => {
+        let startError: Error | undefined;
+        const started = await this.repo.startAgentRun(workspaceId, runId).catch((err) => {
+          startError = err as Error;
+          logger?.error({ runId, err: startError.message }, 'review: could not mark run as started');
+          return false;
+        });
+        if (startError) {
+          // The row is still `queued` and nothing else will settle it: fail it here.
+          await this.repo
+            .completeAgentRun(runId, {
+              status: 'failed',
+              durationMs: 0,
+              tokensIn: 0,
+              tokensOut: 0,
+              findingsCount: 0,
+              grounding: '0/0 passed',
+              error: `Could not start run: ${startError.message}`,
+            })
+            .catch(() => undefined);
+        }
+        if (!started) {
+          await this.repo
+            .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed'))
+            .catch(() => undefined);
+          if (startError) this.container.runBus.complete(runId);
+        }
+        return started;
+      },
+      run: async ({ agent, runId }, state) => {
+        const agentStart = Date.now();
         logger?.info(
           {
             runId,
             agent: agent.name,
-            findings: outcome.findings.length,
-            grounding: outcome.grounding,
-            durationMs: Date.now() - agentStart,
+            provider: agent.provider,
+            model: agent.model,
+            prId: pull.id,
+            running: state.running,
           },
-          `review: agent "${agent.name}" done — ${outcome.findings.length} finding(s)`,
+          `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
         );
-      } catch (err) {
-        // runOneAgent already persisted the failure/cancel (status + error +
-        // trace) and completed the bus; here we only log at the run level.
-        const cancelled = err instanceof RunCancelledError;
-        logger?.[cancelled ? 'info' : 'error'](
-          { runId, agent: agent.name, err: (err as Error).message, durationMs: Date.now() - agentStart },
-          `review: agent "${agent.name}" ${cancelled ? 'cancelled' : 'failed'}`,
-        );
-      }
-    }
+        try {
+          const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog, intentText);
+          logger?.info(
+            {
+              runId,
+              agent: agent.name,
+              findings: outcome.findings.length,
+              grounding: outcome.grounding,
+              durationMs: Date.now() - agentStart,
+            },
+            `review: agent "${agent.name}" done — ${outcome.findings.length} finding(s)`,
+          );
+        } catch (err) {
+          // runOneAgent already persisted the failure/cancel (status + error +
+          // trace) and completed the bus; here we only log at the run level.
+          const cancelled = err instanceof RunCancelledError;
+          logger?.[cancelled ? 'info' : 'error'](
+            { runId, agent: agent.name, err: (err as Error).message, durationMs: Date.now() - agentStart },
+            `review: agent "${agent.name}" ${cancelled ? 'cancelled' : 'failed'}`,
+          );
+        }
+      },
+    });
   }
 
   /** Execute a single agent's review against a PR, streaming progress. */

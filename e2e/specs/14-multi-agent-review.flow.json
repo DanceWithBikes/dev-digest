@@ -1,0 +1,24 @@
+{
+  "name": "Multi-agent review results: Columns, Tabs and the disagreement section of the seeded 2-agent run (SPEC-05 AC-123)",
+  "description": "Open /multi-agent-review, open the seeded finished parent run on PR #484 (API Contract Reviewer + Security Reviewer) from its index row, and assert without launching any run: Columns mode (the default) renders 2 agent columns (AC-123), switching to Tabs mode renders 2 agent tab buttons and one active panel and no columns, and the 'Where agents disagree' section shows at least 1 conflict row. Counts use eval with stdoutIncludes 'true' because wait --text cannot count. Tab buttons are counted by their 'name · score' label and by one data-agent-tab marker per tab; data-agent-panel is the single active panel. Read-only: no mutation, no model call, no chat. Needs the SPEC-05 server seed (seedMultiAgentRun): use e2e:hermetic.",
+  "steps": [
+    {"cmd": ["open", "{BASE}/multi-agent-review"], "label": "open the multi-agent review index"},
+    {"cmd": ["wait", "--url", "/multi-agent-review"], "label": "index route reached"},
+    {"cmd": ["wait", "--text", "Multi-Agent Review"], "label": "the index title renders"},
+    {"cmd": ["wait", "--text", "Tighten /v1/payments query params"], "label": "the seeded run's PR title is listed"},
+    {"cmd": ["eval", "document.querySelectorAll('[data-run-row]').length >= 1"], "label": "the index lists at least one run row", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["eval", "(r=>r?(r.click(),true):false)([...document.querySelectorAll('[data-run-row]')].find(e=>e.textContent.includes('#484')))"], "label": "open the seeded #484 run from its row", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["wait", "--url", "/multi-agent-review/"], "label": "results route reached"},
+    {"cmd": ["wait", "--load", "networkidle"], "label": "the parent run read settles"},
+    {"cmd": ["wait", "--text", "API Contract Reviewer"], "label": "the first agent's name renders"},
+    {"cmd": ["wait", "--text", "Security Reviewer"], "label": "the second agent's name renders"},
+    {"cmd": ["eval", "document.querySelectorAll('[data-agent-column]').length === 2"], "label": "AC-123: Columns mode shows exactly 2 agent columns", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["find", "role", "button", "click", "--name", "Tabs", "--exact"], "label": "switch the results view to Tabs"},
+    {"cmd": ["wait", "--url", "view=tabs"], "label": "tabs view is active in the URL"},
+    {"cmd": ["eval", "[...document.querySelectorAll('button')].filter(b=>/^(API Contract Reviewer|Security Reviewer) · /.test(b.textContent.trim())).length === 2"], "label": "AC-123: Tabs mode shows exactly 2 agent tab buttons", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["eval", "document.querySelectorAll('[data-agent-tab]').length === 2 && document.querySelectorAll('[data-agent-panel]').length === 1 && document.querySelectorAll('[data-agent-column]').length === 0"], "label": "Tabs mode renders 2 tab markers, one active panel and no columns", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["eval", "(s=>s?(s.scrollIntoView({block:'center'}),true):false)(document.querySelector('section[aria-label=\"Where agents disagree\"]'))"], "label": "the disagreement section exists and is scrolled into view (the page scrolls inside main)", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["eval", "document.querySelector('section[aria-label=\"Where agents disagree\"] h2')?.textContent === 'Where agents disagree'"], "label": "AC-123: the disagreement section title renders (CSS uppercases it, so check textContent, not wait --text)", "assert": {"stdoutIncludes": "true"}},
+    {"cmd": ["eval", "document.querySelectorAll('[data-conflict-row]').length >= 1"], "label": "AC-123: the section shows at least 1 conflict row", "assert": {"stdoutIncludes": "true"}}
+  ]
+}

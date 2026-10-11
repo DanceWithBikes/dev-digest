@@ -28,6 +28,11 @@ export async function actOnFinding(
       const row = await repo.setFindingDismissed(findingId, new Date());
       return { finding: findingRowToDto(row!) };
     }
+    case 'learn': {
+      // Bookkeeping only: no model call, no memory, no eval case (SPEC-05 AC-29).
+      const row = await repo.setFindingLearned(findingId, new Date());
+      return { finding: findingRowToDto(row!) };
+    }
     default:
       throw new AppError('invalid_action', `Action '${action}' is not available in the starter`, 400);
   }

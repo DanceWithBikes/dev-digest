@@ -30,11 +30,17 @@ flowchart TD
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · Evals tab)"]
   EVAL["/eval<br/>Eval Dashboard"] -->|"GET /eval/overview"| API
   SETTINGS["/settings/:section<br/>API keys · models"]
+  MAI["/multi-agent-review<br/>parallel runs, newest first"] --> MAN["/multi-agent-review/new<br/>Configure run (?pr=)"]
+  MAI --> MAR["/multi-agent-review/:id<br/>results (?view=columns|tabs)"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
-  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>GET · POST /pulls/:id/brief<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
+  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments<br/>GET · POST /pulls/:id/brief<br/>POST /pulls/:id/review (agentIds via the Run Review popover) · /findings/:id/(accept|dismiss)"| API
+  PR -->|"Configure agents…"| MAN
   AGENTS -->|"/agents · /agents/:id<br/>Evals tab: /agents/:id/eval-cases · /eval-runs · /eval-cases/:id"| API
   SETTINGS -->|"/settings · /providers"| API
+  MAI -->|"GET /multi-agent-runs"| API
+  MAN -->|"GET /repos/:id/pulls · /agents · /multi-agent-runs/estimates<br/>POST /pulls/:id/review (agentIds)"| API
+  MAR -->|"GET /multi-agent-runs/:id (polled every 4 s while running)<br/>POST /findings/:id/(accept|dismiss|learn)<br/>GET /runs/:id/(events|trace)"| API
 ```
 
 On the PR detail route, the Overview tab opens with the **PR Brief** section
@@ -44,6 +50,19 @@ On the PR detail route, the Overview tab opens with the **PR Brief** section
 changed file calls `openFile` in `page.tsx`, which writes `?tab=diff&file=<path>` in one
 `router.replace`; the Files changed tab expands and scrolls to that file, so a reload keeps
 the target, and switching tabs drops `file`. Spec: `../docs/specs/pr-brief.md`.
+
+**Multi-Agent Review (SPEC-05).** The PR header's *Run Review* button opens
+`RunReviewPopover` (`src/app/repos/[repoId]/pulls/[number]/_components/RunReviewPopover`):
+one checkbox per agent, the enabled ones (at most 6) pre-checked, and a launch that sends one
+`POST /pulls/:id/review` with `agentIds` and opens `/multi-agent-review/<parent id>`. The
+routes live in `src/app/multi-agent-review/` — the index (`page.tsx`), *Configure run*
+(`new/page.tsx`, `?pr=` preselects a PR of the active repo, estimates from
+`GET /multi-agent-runs/estimates`) and the results page (`[id]/page.tsx`, Columns | Tabs kept in
+`?view=`, a live log only for `running` columns, and the *Where agents disagree* table). Hooks:
+`src/lib/hooks/multi-agent.ts`; the 6-agent cap: `src/lib/multi-agent.ts`. The run trace drawer
+and the finding card are shared with the PR route from `src/components/run-trace-drawer` and
+`src/components/finding-card`. The sidebar has a GLOBAL section with one *Multi-Agent Review*
+entry (`src/vendor/ui/nav.ts`). Spec: `../docs/specs/multi-agent-review.md`.
 
 Cross-cutting chrome lives in `src/components/app-shell` (nav, breadcrumbs,
 `g`-then-key shortcuts). Pages are thin; feature logic sits in colocated

@@ -58,6 +58,7 @@ here except `compose.ts` may import `@devdigest/shared` and
 - **`run_agent_on_pr` requires an explicit target.** `agent_id` XOR `all: true`
   — no implicit "run everything" default, and no implicit "run whatever's
   enabled" either; same discriminated-union treatment as the PR reference.
+- **Concurrency is inherited, not re-implemented.** `run_agent_on_pr` goes through `ReviewService#runReview` (`compose.ts#runAgentOnPr`), so a launch with `all: true` runs at most `MAX_PARALLEL_AGENTS` (4) agents at once and keeps the rest `queued` (`drain` already treats `queued` as in flight). The tool still takes `agent_id` XOR `all`: it never sends `agentIds` and so never creates a multi-agent parent run.
 - **A failed/cancelled run is not a tool error.** `get_findings` returns it
   normally — `run.status`/`run.error` carry the failure; `review` is simply
   `null`. Only a genuinely unexpected condition (bad id, missing arguments) is

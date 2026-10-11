@@ -15,6 +15,7 @@ cd <package> && pnpm typecheck
 - `server/` — Fastify API, DB, review runs
 - `client/` — Next.js UI ("the studio")
 - `reviewer-core/` — review engine, no I/O
+- `agent-runner/` — CI runner CLI, ncc-bundled into the target repo's GitHub Actions
 - `e2e/` — deterministic browser flows
 - `docs/agent-prompts/` — system prompts of the built-in agents
 - `.claude/skills/` — stack skills (drizzle, fastify, zod, next, react…)

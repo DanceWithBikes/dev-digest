@@ -31,7 +31,7 @@
     {"cmd": ["wait", "--text", "View pull request"], "label": "AC-125: the PR link appears"},
     {"cmd": ["eval", "!!document.querySelector('[data-testid=ci-install-done] a[target=_blank]') && !document.querySelector('[data-testid=ci-install-error]')"], "label": "the PR link opens in a new tab and no install error is shown", "assert": {"stdoutIncludes": "true"}},
     {"cmd": ["eval", "(b=>b?(b.click(),true):false)([...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Close'))"], "label": "close the wizard through its footer Close button (the header X has no text)", "assert": {"stdoutIncludes": "true"}},
-    {"cmd": ["wait", "--text", "PR OPEN"], "label": "the installation row shows the pr_open state"},
+    {"cmd": ["wait", "--text", "PR open"], "label": "the installation row shows the pr_open state"},
     {"cmd": ["eval", "[...document.querySelectorAll('[data-testid=ci-installation-row]')].some(r=>r.textContent.includes('acme/payments-api')&&r.textContent.includes('PR open'))"], "label": "AC-125: the row is acme/payments-api in state PR open", "assert": {"stdoutIncludes": "true"}}
   ]
 }
